@@ -1,0 +1,11 @@
+name = "maize"
+version = "0.1.0"
+defaultTargets = ["Maize"]
+
+[[lean_lib]]
+name = "Maize"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.36.0"
