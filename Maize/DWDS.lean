@@ -141,6 +141,58 @@ theorem universal_yesAndNo : dwds.Universal .yesAndNo := by
   intro o
   cases o <;> trivial
 
+/-! ## A minimal example -/
+
+inductive MiniCond where
+  | loaded | locked
+  deriving DecidableEq
+
+instance : Fintype MiniCond where
+  elems := {MiniCond.loaded, MiniCond.locked}
+  complete := by
+    intro c
+    cases c <;> simp
+
+inductive MiniAsrt where
+  | stevedore
+  deriving DecidableEq
+
+-- a scenario: expected loaded, expected locked, mode for notifying the stevedore
+def miniScenario (eLoaded eLocked : State) (mStevedore : Mode) :
+    Clause dwds MiniCond MiniAsrt where
+  expects
+    | .loaded => eLoaded
+    | .locked => eLocked
+  asserts
+    | .stevedore => mStevedore
+
+-- 1: loaded, locked either way → MUST notify; 2: loaded either way, locked → MAY notify
+def mini : Table dwds MiniCond MiniAsrt := ⟨[
+  miniScenario .yes .yesOrNo .must,
+  miniScenario .yesOrNo .yes .may
+]⟩
+
+-- observed loaded and locked
+def miniObserve (oLoaded oLocked : State) : Is dwds MiniCond
+  | .loaded => oLoaded
+  | .locked => oLocked
+
+-- loaded and not locked: only scenario 1 applies
+theorem mini_one :
+    mini.execute (miniObserve .yes .no) .stevedore = [.must] := by
+  decide
+
+-- loaded and locked: both apply, so the notification is left to a human
+theorem mini_both :
+    mini.execute (miniObserve .yes .yes) .stevedore = [.must, .may] := by
+  decide
+
+theorem mini_deferred : mini.Deferred (miniObserve .yes .yes) .stevedore :=
+  ⟨.must, .may,
+    (mini.mem_execute _ .stevedore .must).mp (by decide),
+    (mini.mem_execute _ .stevedore .may).mp (by decide),
+    by decide⟩
+
 /-! ## Container example (Figure 28, Figures 30–31) -/
 
 inductive Cond where
