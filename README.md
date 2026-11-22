@@ -44,7 +44,7 @@ A row matches an input when every cell in that row passes its test.
    - **collect (`C`):** return a list of outputs from all matching rows, without treating row order as meaningful.
    - **rule order (`R`):** like collect, returning the outputs of all matching rows in top-to-bottom order.
 
-### Example #1: ticket prices
+### Example 1: ticket prices
 
 Consider the faulty ticket table written in DMN under the **unique** policy (`DMN.ticketBuggy`):
 
@@ -57,7 +57,7 @@ Instead of guessing test inputs, Maize converts each cell's test into a normalis
 Searching `DMN.ticketBuggy` automatically finds the overlap and returns age `12` (`DMN.ticketBuggy_conflict`), where evaluation indeed fails with a violation.
 Changing the first row from `<= 12` to `< 12` gives `DMN.ticketFixed`: the search now finds nothing, proving that no visitor age will ever cause a violation (`DMN.ticketFixed_never_violates`).
 
-### Example #2: four-column freight surcharges
+### Example 2: four-column freight surcharges
 
 Boundary-value testing on a single column might easily try `12`, `1000`, or `50000` in isolation; the real hazard in multi-column tables is an unintended combination across several columns at once.
 `DMN.freightBuggy` defines five surcharge rules across four inputs—weight, declared value, destination region, and hazardous goods—where two rules look separate at a glance, yet an off-by-one (`< 50001` instead of `< 50000`) makes them collide:
@@ -85,7 +85,7 @@ When matching a scenario against observed facts (`DWDS.hit`), everything matches
 2. **Obligation modes and human choice (`DWDS.Mode`):** Instead of returning numbers or text, each output row expresses whether an action **MUST**, **MAY**, or **SHOULD** happen—or **NOT**, which simply means this scenario says nothing about that action.
 DWDS has no hit policy that discards rows or throws errors: all matching scenarios contribute their answers, and if two matching scenarios give different modes for the same action (such as `MUST` and `MAY`), the decision is **deferred** (`Table.Deferred`) to a person.
 
-### Example #1: notifying the stevedore
+### Example 1: notifying the stevedore
 
 Consider a two-scenario gate (`DWDS.mini`) deciding whether to notify a stevedore, depending on whether a shipping container is loaded and locked (written with scenarios as columns):
 
@@ -98,7 +98,7 @@ Consider a two-scenario gate (`DWDS.mini`) deciding whether to notify a stevedor
 If the container is loaded (`YES`) and not locked (`NO`), only Scenario 1 matches, so the answer is `MUST` (`DWDS.mini_one`).
 If it is both loaded (`YES`) and locked (`YES`), both scenarios match and assert `MUST` and `MAY`, leaving the decision to a person (`DWDS.mini_deferred`)—a situation Maize's conflict search finds on its own (`DWDS.mini_choice`).
 
-### Example #2: container (Potvin's thesis)
+### Example 2: container (Potvin's thesis)
 
 Maize encodes the full eight-scenario shipping container gate from Figure 28 of Potvin's thesis (`DWDS.container`, which controls green, yellow, and red signal lights alongside stevedore and insurance notifications) and reproduces the worked examples from Figures 30 and 31 (`DWDS.exampleA`, `DWDS.exampleB`).
 Searching across all definite (`YES`/`NO`) facts proves that the green, yellow, and red lights never require a human decision (`DWDS.container_decisive_green`, `DWDS.container_decisive_yellow`, `DWDS.container_decisive_red`), while uncovering a stevedore choice point—when a container is not loaded, not inspected, and locked (`DWDS.container_stevedore_choice`)—that the thesis's worked figures do not show, alongside the insurance conflict (`DWDS.container_insurance_choice`).
