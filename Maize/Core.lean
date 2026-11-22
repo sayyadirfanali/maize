@@ -5,17 +5,18 @@ namespace Maize
 /-! ## Definitions -/
 
 structure Logic where
-  State : Type                   -- type for states of a Condition
-  Mode : Type                    -- type for modes of an Assertion
-  hit : State → State → Prop     -- `hit e o` means expected state `e` hit observed state `o`
-  absent : Mode                  -- NO assertion
+  Expected : Type                     -- what a cell of a clause says
+  Observed : Type                     -- what a fact says
+  Mode : Type                         -- type for modes of an Assertion
+  hit : Expected → Observed → Prop    -- `hit e o` means expected `e` hit observed `o`
+  absent : Mode                       -- NO assertion
 
 variable (L : Logic) (Condition Assertion : Type)
 
-abbrev Is := Condition → L.State  -- observed state of each condition
+abbrev Is := Condition → L.Observed  -- observed state of each condition
 
 structure Clause where
-  expects : Condition → L.State   -- expected state of each condition
+  expects : Condition → L.Expected  -- expected state of each condition
   asserts : Assertion → L.Mode    -- produced mode of each assertion
 
 structure Table where
@@ -60,27 +61,33 @@ def Table.Equiv (t u : Table L Condition Assertion) : Prop :=
   ∀ i a m, t.Ought i a m ↔ u.Ought i a m
 
 -- every `i c` satisfies `P`
-def Is.Satisfies (P : L.State → Prop) (i : Is L Condition) : Prop :=
+def Is.Satisfies (P : L.Observed → Prop) (i : Is L Condition) : Prop :=
   ∀ c, P (i c)
 
 -- some `i` satisfying `P` invokes both `k` and `k'`
-def Clause.CoInvocable (P : L.State → Prop) (k k' : Clause L Condition Assertion) : Prop :=
+def Clause.CoInvocable (P : L.Observed → Prop) (k k' : Clause L Condition Assertion) : Prop :=
   ∃ i : Is L Condition, i.Satisfies P ∧ k.Invoked i ∧ k'.Invoked i
 
 variable (L) in
 -- `o'` is at least as precise as `o`: every `e` hitting `o'` hits `o`
-def Logic.Refines (o' o : L.State) : Prop :=
+def Logic.Refines (o' o : L.Observed) : Prop :=
   ∀ e, L.hit e o' → L.hit e o
 
 -- `i' c` refines `i c` for every `c`
 def Is.Refines (i' i : Is L Condition) : Prop :=
   ∀ c, L.Refines (i' c) (i c)
 
--- modes asserted for `a` by clauses invoked by `i`, `absent` removed
+-- clauses of `t` invoked by `i`, in table order
+def Table.matching (t : Table L Condition Assertion) (i : Is L Condition)
+    [DecidablePred fun k : Clause L Condition Assertion => k.Invoked i] :
+    List (Clause L Condition Assertion) :=
+  t.clauses.filter fun k => decide (k.Invoked i)
+
+-- modes asserted for `a` by `t.matching i`, `absent` removed
 def Table.execute (t : Table L Condition Assertion) (i : Is L Condition) (a : Assertion)
     [DecidablePred fun k : Clause L Condition Assertion => k.Invoked i] [DecidableEq L.Mode] :
     List L.Mode :=
-  ((t.clauses.filter fun k => decide (k.Invoked i)).map (·.asserts a)).filter (· ≠ L.absent)
+  ((t.matching i).map (·.asserts a)).filter (· ≠ L.absent)
 
 -- rows of `k` reindexed along `f` (conditions) and `g` (assertions)
 def Clause.comap {Condition' Assertion' : Type} (f : Condition' → Condition)
@@ -93,6 +100,29 @@ def Table.comap {Condition' Assertion' : Type} (f : Condition' → Condition)
     Table L Condition' Assertion' :=
   ⟨t.clauses.map (Clause.comap f g)⟩
 
+-- `k` and `k'` assert different modes for `a`, neither absent
+def Clause.Disagree (a : Assertion) (k k' : Clause L Condition Assertion) : Prop :=
+  k.asserts a ≠ k'.asserts a ∧ k.asserts a ≠ L.absent ∧ k'.asserts a ≠ L.absent
+
+-- no `i` satisfying `P` makes `a` deferred
+def Table.Decisive (P : L.Observed → Prop) (t : Table L Condition Assertion)
+    (a : Assertion) : Prop :=
+  ∀ i : Is L Condition, i.Satisfies P → ¬ t.Deferred i a
+
+variable (L) in
+-- `u` hits every state
+def Logic.Universal (u : L.Expected) : Prop :=
+  ∀ o, L.hit u o
+
+-- expected states mapped by `fE`, modes by `g`
+def Clause.map {L' : Logic} (fE : L.Expected → L'.Expected) (g : L.Mode → L'.Mode)
+    (k : Clause L Condition Assertion) : Clause L' Condition Assertion :=
+  ⟨fE ∘ k.expects, g ∘ k.asserts⟩
+
+def Table.map {L' : Logic} (fE : L.Expected → L'.Expected) (g : L.Mode → L'.Mode)
+    (t : Table L Condition Assertion) : Table L' Condition Assertion :=
+  ⟨t.clauses.map (Clause.map fE g)⟩
+
 /-! ## Statuses -/
 
 theorem Table.trichotomy {t : Table L Condition Assertion} {i : Is L Condition}
@@ -104,14 +134,16 @@ theorem Table.trichotomy {t : Table L Condition Assertion} {i : Is L Condition}
   · exact Or.inr (Or.inl hDeterminate)
   simp only [Table.Silent, Table.Determinate] at hSilent hDeterminate
   push Not at hSilent hDeterminate
-  obtain ⟨m, hm⟩ := hSilent
-  obtain ⟨m', hm', hne⟩ := hDeterminate m hm
+  obtain ⟨m, hm⟩ : ∃ m, t.Ought i a m := hSilent
+  obtain ⟨m', hm', hne⟩ : ∃ m', t.Ought i a m' ∧ m' ≠ m := hDeterminate m hm
   exact Or.inr (Or.inr ⟨m, m', hm, hm', hne.symm⟩)
 
 theorem Table.determinate_not_deferred {t : Table L Condition Assertion} {i : Is L Condition}
     {a : Assertion} :
     t.Determinate i a → ¬ t.Deferred i a := by
-  intro ⟨m, _, huniq⟩ ⟨n, n', hn, hn', hne⟩
+  intro hDeterminate hDeferred
+  obtain ⟨m, -, huniq⟩ := hDeterminate
+  obtain ⟨n, n', hn, hn', hne⟩ := hDeferred
   have hn_eq : n = m := huniq n hn
   have hn'_eq : n' = m := huniq n' hn'
   exact hne (hn_eq.trans hn'_eq.symm)
@@ -119,16 +151,18 @@ theorem Table.determinate_not_deferred {t : Table L Condition Assertion} {i : Is
 theorem Table.silent_not_determinate {t : Table L Condition Assertion} {i : Is L Condition}
     {a : Assertion} :
     t.Silent i a → ¬ t.Determinate i a := by
-  intro hSilent ⟨m, hm, _⟩
+  intro hSilent hDeterminate
+  obtain ⟨m, hm, -⟩ := hDeterminate
   exact hSilent m hm
 
 theorem Table.silent_not_deferred {t : Table L Condition Assertion} {i : Is L Condition}
     {a : Assertion} :
     t.Silent i a → ¬ t.Deferred i a := by
-  intro hSilent ⟨m, _, hm, _, _⟩
+  intro hSilent hDeferred
+  obtain ⟨m, -, hm, -, -⟩ := hDeferred
   exact hSilent m hm
 
-/-! ## Order and Repetition -/
+/-! ## Order and repetition of clauses -/
 
 theorem Table.ought_congr_mem {t u : Table L Condition Assertion}
     (hmem : ∀ k, k ∈ t.clauses ↔ k ∈ u.clauses)
@@ -162,7 +196,7 @@ theorem Table.ought_cons_of_mem {t : Table L Condition Assertion}
   · intro hk'
     exact List.mem_cons_of_mem k hk'
 
-/-! ## Combination and Equivalence -/
+/-! ## Combination and equivalence -/
 
 theorem Table.ought_append (t u : Table L Condition Assertion) (i : Is L Condition)
     (a : Assertion) (m : L.Mode) :
@@ -206,23 +240,25 @@ theorem Table.append_self (t : Table L Condition Assertion) : (t.append t).Equiv
   intro i a m
   rw [ought_append, or_self]
 
-/-! ## Coinvocation -/
+/-! ## Co-invocation is decided row by row -/
 
-theorem Clause.coInvocable_iff (P : L.State → Prop) (k k' : Clause L Condition Assertion) :
-    k.CoInvocable P k' ↔ ∀ c, ∃ o, P o ∧ L.hit (k.expects c) o ∧ L.hit (k'.expects c) o := by
+theorem Clause.coInvocable_iff (P : L.Observed → Prop) (k k' : Clause L Condition Assertion) :
+    k.CoInvocable P k' ↔
+      ∀ c, ∃ o, P o ∧ L.hit (k.expects c) o ∧ L.hit (k'.expects c) o := by
   constructor
-  · intro ⟨i, hsat, hinv, hinv'⟩ c
+  · intro hco c
+    obtain ⟨i, hsat, hinv, hinv'⟩ := hco
     exact ⟨i c, hsat c, hinv c, hinv' c⟩
-  · intro h
-    choose i hsat hinv hinv' using h
+  · intro hrow
+    choose i hsat hinv hinv' using hrow  -- `i c` is the witness `o` for row `c`
     exact ⟨i, hsat, hinv, hinv'⟩
 
 /-! ## Precision -/
 
-theorem Logic.Refines.refl (o : L.State) : L.Refines o o :=
+theorem Logic.Refines.refl (o : L.Observed) : L.Refines o o :=
   fun _ h => h
 
-theorem Logic.Refines.trans {o₁ o₂ o₃ : L.State} :
+theorem Logic.Refines.trans {o₁ o₂ o₃ : L.Observed} :
     L.Refines o₁ o₂ → L.Refines o₂ o₃ → L.Refines o₁ o₃ := by
   intro h₁₂ h₂₃ e he
   exact h₂₃ e (h₁₂ e he)
@@ -243,8 +279,10 @@ theorem Clause.Invoked.of_refines {k : Clause L Condition Assertion} {i' i : Is 
 theorem Table.Ought.of_refines {t : Table L Condition Assertion} {i' i : Is L Condition}
     {a : Assertion} {m : L.Mode} :
     i'.Refines i → t.Ought i' a m → t.Ought i a m := by
-  intro href ⟨k, hk, hinv, hasserts, hne⟩
-  exact ⟨k, hk, hinv.of_refines href, hasserts, hne⟩
+  intro href hought
+  obtain ⟨k, hk, hinv', hasserts, hne⟩ := hought
+  have hinv : k.Invoked i := hinv'.of_refines href
+  exact ⟨k, hk, hinv, hasserts, hne⟩
 
 -- silence survives gaining precision
 theorem Table.Silent.of_refines {t : Table L Condition Assertion} {i' i : Is L Condition}
@@ -257,41 +295,64 @@ theorem Table.Silent.of_refines {t : Table L Condition Assertion} {i' i : Is L C
 theorem Table.Deferred.of_refines {t : Table L Condition Assertion} {i' i : Is L Condition}
     {a : Assertion} :
     i'.Refines i → t.Deferred i' a → t.Deferred i a := by
-  intro href ⟨m, m', hm, hm', hne⟩
+  intro href hDeferred
+  obtain ⟨m, m', hm, hm', hne⟩ := hDeferred
   exact ⟨m, m', hm.of_refines href, hm'.of_refines href, hne⟩
 
 -- if at most `m` is asserted under `i`, then under the more precise `i'`
 -- exactly `m` is asserted, or nothing is
 theorem Table.Determinate.of_refines {t : Table L Condition Assertion} {i' i : Is L Condition}
-    {a : Assertion} {m : L.Mode} (href : i'.Refines i)
+    {a : Assertion} {m : L.Mode}
+    (href : i'.Refines i)
     (huniq : ∀ m', t.Ought i a m' → m' = m) :
     (t.Ought i' a m ∧ ∀ m', t.Ought i' a m' → m' = m) ∨ t.Silent i' a := by
-  by_cases h : ∃ n, t.Ought i' a n
+  by_cases hsome : ∃ n, t.Ought i' a n
   · left
-    obtain ⟨n, hn⟩ := h
-    rw [huniq n (hn.of_refines href)] at hn
+    obtain ⟨n, hn⟩ := hsome
+    have hnm : n = m := huniq n (hn.of_refines href)
+    rw [hnm] at hn
     exact ⟨hn, fun x hx => huniq x (hx.of_refines href)⟩
   · right
-    exact fun x hx => h ⟨x, hx⟩
+    exact fun x hx => hsome ⟨x, hx⟩
 
-/-! ## Evaluator -/
+/-! ## Executable evaluator -/
+
+theorem Table.mem_matching (t : Table L Condition Assertion) (i : Is L Condition)
+    [DecidablePred fun k : Clause L Condition Assertion => k.Invoked i]
+    (k : Clause L Condition Assertion) :
+    k ∈ t.matching i ↔ k ∈ t.clauses ∧ k.Invoked i := by
+  simp only [matching, List.mem_filter, decide_eq_true_eq]
 
 theorem Table.mem_execute (t : Table L Condition Assertion) (i : Is L Condition) (a : Assertion)
     [DecidablePred fun k : Clause L Condition Assertion => k.Invoked i] [DecidableEq L.Mode]
     (m : L.Mode) :
     m ∈ t.execute i a ↔ t.Ought i a m := by
-  simp only [execute, List.mem_filter, List.mem_map, decide_eq_true_eq]
+  simp only [execute, List.mem_filter, List.mem_map, mem_matching, decide_eq_true_eq]
   constructor
-  · rintro ⟨⟨k, ⟨hk, hinv⟩, hasserts⟩, hne⟩
+  · intro ⟨hmem, hne⟩
+    obtain ⟨k, ⟨hk, hinv⟩, hasserts⟩ := hmem
     exact ⟨k, hk, hinv, hasserts, hne⟩
-  · rintro ⟨k, hk, hinv, hasserts, hne⟩
+  · intro hought
+    obtain ⟨k, hk, hinv, hasserts, hne⟩ := hought
     exact ⟨⟨k, ⟨hk, hinv⟩, hasserts⟩, hne⟩
 
-/-! ## Renaming -/
+-- `execute` returning exactly `[m]` means determinate
+theorem Table.determinate_of_execute {t : Table L Condition Assertion} {i : Is L Condition}
+    {a : Assertion}
+    [DecidablePred fun k : Clause L Condition Assertion => k.Invoked i] [DecidableEq L.Mode]
+    {m : L.Mode}
+    (hexec : t.execute i a = [m]) :
+    t.Determinate i a := by
+  have hiff : ∀ m', t.Ought i a m' ↔ m' = m := by
+    intro m'
+    rw [← t.mem_execute i a m', hexec, List.mem_singleton]
+  exact ⟨m, (hiff m).mpr rfl, fun m' hm' => (hiff m').mp hm'⟩
+
+/-! ## Renaming conditions and assertions -/
 
 theorem Clause.invoked_comap {Condition' Assertion' : Type} {f : Condition' → Condition}
-    (hf : Function.Surjective f) (g : Assertion' → Assertion)
-    (k : Clause L Condition Assertion) (i : Is L Condition) :
+    (hf : Function.Surjective f)
+    (g : Assertion' → Assertion) (k : Clause L Condition Assertion) (i : Is L Condition) :
     (k.comap f g).Invoked (i ∘ f) ↔ k.Invoked i := by
   constructor
   · intro hinv c
@@ -301,15 +362,136 @@ theorem Clause.invoked_comap {Condition' Assertion' : Type} {f : Condition' → 
     exact hinv (f c')
 
 theorem Table.ought_comap {Condition' Assertion' : Type} {f : Condition' → Condition}
-    (hf : Function.Surjective f) (g : Assertion' → Assertion)
-    (t : Table L Condition Assertion) (i : Is L Condition) (a' : Assertion') (m : L.Mode) :
+    (hf : Function.Surjective f)
+    (g : Assertion' → Assertion) (t : Table L Condition Assertion) (i : Is L Condition)
+    (a' : Assertion') (m : L.Mode) :
     (t.comap f g).Ought (i ∘ f) a' m ↔ t.Ought i (g a') m := by
   constructor
-  · intro ⟨k', hk', hinv, hasserts, hne⟩
-    obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hk'
-    exact ⟨k, hk, (k.invoked_comap hf g i).mp hinv, hasserts, hne⟩
-  · intro ⟨k, hk, hinv, hasserts, hne⟩
+  · intro hought
+    obtain ⟨k', hk', hinv', hasserts, hne⟩ := hought
+    obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hk'  -- `k'` is `k.comap f g`
+    have hinv : k.Invoked i := (k.invoked_comap hf g i).mp hinv'
+    exact ⟨k, hk, hinv, hasserts, hne⟩
+  · intro hought
+    obtain ⟨k, hk, hinv, hasserts, hne⟩ := hought
     have hk' : k.comap f g ∈ (t.comap f g).clauses := List.mem_map.mpr ⟨k, hk, rfl⟩
-    exact ⟨k.comap f g, hk', (k.invoked_comap hf g i).mpr hinv, hasserts, hne⟩
+    have hinv' : (k.comap f g).Invoked (i ∘ f) := (k.invoked_comap hf g i).mpr hinv
+    exact ⟨k.comap f g, hk', hinv', hasserts, hne⟩
+
+/-! ## Translating tables between logics -/
+
+-- `fE` and `fO` keep hit: invocation is unchanged
+theorem Clause.invoked_map {L' : Logic} {fE : L.Expected → L'.Expected}
+    {fO : L.Observed → L'.Observed}
+    (hf : ∀ e o, L'.hit (fE e) (fO o) ↔ L.hit e o)
+    (g : L.Mode → L'.Mode) (k : Clause L Condition Assertion) (i : Is L Condition) :
+    (k.map fE g).Invoked (fO ∘ i) ↔ k.Invoked i :=
+  forall_congr' fun c => hf (k.expects c) (i c)
+
+theorem Table.ought_map {L' : Logic} {fE : L.Expected → L'.Expected}
+    {fO : L.Observed → L'.Observed} {g : L.Mode → L'.Mode}
+    (hf : ∀ e o, L'.hit (fE e) (fO o) ↔ L.hit e o)    -- `fE`, `fO` keep hit
+    (hg : Function.Injective g)
+    (habsent : ∀ m, g m = L'.absent ↔ m = L.absent)    -- `g` keeps `absent`
+    (t : Table L Condition Assertion) (i : Is L Condition) (a : Assertion) (m : L.Mode) :
+    (t.map fE g).Ought (fO ∘ i) a (g m) ↔ t.Ought i a m := by
+  constructor
+  · intro hought
+    obtain ⟨k', hk', hinv', hasserts, hne⟩ := hought
+    obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hk'  -- `k'` is `k.map fE g`
+    have hinv : k.Invoked i := (k.invoked_map hf g i).mp hinv'
+    have hm : k.asserts a = m := hg hasserts
+    have hm_abs : m ≠ L.absent := fun h => hne ((habsent m).mpr h)
+    exact ⟨k, hk, hinv, hm, hm_abs⟩
+  · intro hought
+    obtain ⟨k, hk, hinv, hasserts, hne⟩ := hought
+    have hk' : k.map fE g ∈ (t.map fE g).clauses := List.mem_map.mpr ⟨k, hk, rfl⟩
+    have hinv' : (k.map fE g).Invoked (fO ∘ i) := (k.invoked_map hf g i).mpr hinv
+    have hm : (k.map fE g).asserts a = g m := congrArg g hasserts
+    have hm_abs : g m ≠ L'.absent := fun h => hne ((habsent m).mp h)
+    exact ⟨k.map fE g, hk', hinv', hm, hm_abs⟩
+
+/-! ## Choice points come from pairs of clauses -/
+
+-- `a` has a choice point within `P` iff two clauses disagreeing on `a` can fire together
+theorem Table.not_decisive_iff (P : L.Observed → Prop) (t : Table L Condition Assertion)
+    (a : Assertion) :
+    ¬ t.Decisive P a ↔
+      ∃ k ∈ t.clauses, ∃ k' ∈ t.clauses, k.Disagree a k' ∧ k.CoInvocable P k' := by
+  constructor
+  · intro hnot
+    unfold Decisive at hnot
+    push Not at hnot
+    obtain ⟨i, hsat, hDeferred⟩ := hnot
+    obtain ⟨m, m', hm, hm', hne⟩ := hDeferred
+    obtain ⟨k, hk, hinv, rfl, hm_abs⟩ := hm      -- `m` is `k.asserts a`
+    obtain ⟨k', hk', hinv', rfl, hm'_abs⟩ := hm'  -- `m'` is `k'.asserts a`
+    have hdis : k.Disagree a k' := ⟨hne, hm_abs, hm'_abs⟩
+    have hco : k.CoInvocable P k' := ⟨i, hsat, hinv, hinv'⟩
+    exact ⟨k, hk, k', hk', hdis, hco⟩
+  · intro hpair hdec
+    obtain ⟨k, hk, k', hk', hdis, hco⟩ := hpair
+    obtain ⟨hne, hm_abs, hm'_abs⟩ := hdis
+    obtain ⟨i, hsat, hinv, hinv'⟩ := hco
+    have hm : t.Ought i a (k.asserts a) := ⟨k, hk, hinv, rfl, hm_abs⟩
+    have hm' : t.Ought i a (k'.asserts a) := ⟨k', hk', hinv', rfl, hm'_abs⟩
+    exact hdec i hsat ⟨k.asserts a, k'.asserts a, hm, hm', hne⟩
+
+-- if a row can be met by both `e` and `e'` exactly when `R e e'`,
+-- `a` is decisive iff every disagreeing pair has a row where `R` fails
+theorem Table.decisive_iff_rows {P : L.Observed → Prop} {R : L.Expected → L.Expected → Prop}
+    (hrow : ∀ e e', (∃ o, P o ∧ L.hit e o ∧ L.hit e' o) ↔ R e e')
+    (t : Table L Condition Assertion) (a : Assertion) :
+    t.Decisive P a ↔
+      ∀ k ∈ t.clauses, ∀ k' ∈ t.clauses,
+        k.Disagree a k' → ∃ c, ¬ R (k.expects c) (k'.expects c) := by
+  have hco_iff : ∀ k k' : Clause L Condition Assertion,
+      k.CoInvocable P k' ↔ ∀ c, R (k.expects c) (k'.expects c) := by
+    intro k k'
+    rw [Clause.coInvocable_iff]
+    exact forall_congr' fun c => hrow (k.expects c) (k'.expects c)
+  constructor
+  · intro hdec k hk k' hk' hdis
+    by_contra hno
+    push Not at hno
+    have hco : k.CoInvocable P k' := (hco_iff k k').mpr hno
+    have hnot : ¬ t.Decisive P a :=
+      (not_decisive_iff P t a).mpr ⟨k, hk, k', hk', hdis, hco⟩
+    exact hnot hdec
+  · intro hpairs
+    by_contra hnot
+    obtain ⟨k, hk, k', hk', hdis, hco⟩ := (not_decisive_iff P t a).mp hnot
+    have hrows : ∀ c, R (k.expects c) (k'.expects c) := (hco_iff k k').mp hco
+    obtain ⟨c, hclash⟩ := hpairs k hk k' hk' hdis
+    exact hclash (hrows c)
+
+/-! ## Catch-all clauses -/
+
+-- a clause expecting a universal state everywhere is invoked by every `i`
+theorem Clause.invoked_of_universal {u : L.Expected}
+    (hu : L.Universal u)
+    (k : Clause L Condition Assertion)
+    (hk : ∀ c, k.expects c = u)
+    (i : Is L Condition) :
+    k.Invoked i := by
+  intro c
+  rw [hk c]
+  exact hu (i c)
+
+-- a catch-all `z` disagreeing with an invocable `k` creates a choice point
+theorem Table.not_decisive_of_catchAll {P : L.Observed → Prop}
+    {t : Table L Condition Assertion} {a : Assertion} {u : L.Expected}
+    {z k : Clause L Condition Assertion}
+    (hu : L.Universal u)
+    (hz : z ∈ t.clauses)
+    (hzu : ∀ c, z.expects c = u)                                -- `z` is a catch-all
+    (hk : k ∈ t.clauses)
+    (hdis : z.Disagree a k)
+    (hinv : ∃ i : Is L Condition, i.Satisfies P ∧ k.Invoked i) :  -- `k` can fire within `P`
+    ¬ t.Decisive P a := by
+  obtain ⟨i, hsat, hki⟩ := hinv
+  have hzi : z.Invoked i := z.invoked_of_universal hu hzu i
+  have hco : z.CoInvocable P k := ⟨i, hsat, hzi, hki⟩
+  exact (not_decisive_iff P t a).mpr ⟨z, hz, k, hk, hdis, hco⟩
 
 end Maize
