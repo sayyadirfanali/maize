@@ -366,6 +366,121 @@ theorem eval_first_catchAll {C A : Type} [Fintype C] [Fintype A] (t : Table dmn 
   rw [hmatch]
   cases t.matching i <;> rfl
 
+/-! ## Finding a conflicting input -/
+
+-- a value in `s`, if there is one
+def Shape.sample : Shape → Option Value
+  | .all => some (.int 0)
+  | .ints none none => some (.int 0)
+  | .ints none (some h) => some (.int h)
+  | .ints (some l) none => some (.int l)
+  | .ints (some l) (some h) => if l ≤ h then some (.int l) else none
+  | .vals [] => none
+  | .vals (v :: _) => some v
+
+theorem Shape.sample_mem {s : Shape} {w : Value} (h : s.sample = some w) : s.Mem w := by
+  cases s with
+  | all => exact trivial
+  | vals vs =>
+    cases vs with
+    | nil => simp [Shape.sample] at h
+    | cons v _ =>
+      simp only [Shape.sample, Option.some.injEq] at h
+      subst h
+      exact List.mem_cons_self ..
+  | ints lo hi =>
+    cases lo with
+    | none =>
+      cases hi with
+      | none =>
+        simp only [Shape.sample, Option.some.injEq] at h
+        subst h
+        exact ⟨trivial, trivial⟩
+      | some hb =>
+        simp only [Shape.sample, Option.some.injEq] at h
+        subst h
+        exact ⟨trivial, Int.le_refl hb⟩
+    | some l =>
+      cases hi with
+      | none =>
+        simp only [Shape.sample, Option.some.injEq] at h
+        subst h
+        exact ⟨Int.le_refl l, trivial⟩
+      | some hb =>
+        by_cases hle : l ≤ hb
+        · simp only [Shape.sample, ite_eq_left hle, Option.some.injEq] at h
+          subst h
+          exact ⟨Int.le_refl l, hle⟩
+        · simp [Shape.sample, hle] at h
+
+-- a value is found exactly when the shape is non-empty
+theorem Shape.sample_isSome_iff (s : Shape) : s.sample.isSome = s.nonempty := by
+  cases s with
+  | all => rfl
+  | vals vs => cases vs <;> rfl
+  | ints lo hi =>
+    cases lo with
+    | none => cases hi <;> rfl
+    | some l =>
+      cases hi with
+      | none => rfl
+      | some hb => by_cases hle : l ≤ hb <;> simp [Shape.sample, Shape.nonempty, hle]
+
+-- for DMN, a value in the intersection of the two cells' shapes
+def sampler : dmn.Sampler (fun _ => True) where
+  sample e e' := (e.shape.inter e'.shape).sample
+  sound h := by
+    have hm := (Shape.mem_inter _ _ _).mp (Shape.sample_mem h)
+    exact ⟨trivial, (passes_iff_mem _ _).mpr hm.1, (passes_iff_mem _ _).mpr hm.2⟩
+  complete h := by
+    obtain ⟨o, -, h₁, h₂⟩ := h
+    rw [Shape.sample_isSome_iff]
+    exact (Test.overlap_iff _ _).mp ⟨o, h₁, h₂⟩
+
+-- search a table for two rules, earlier one first, that can match the same input
+def findUniqueConflict {C A : Type} [Fintype C] (t : Table dmn C A) :
+    Option (Clause dmn C A × Clause dmn C A × Is dmn C) :=
+  findPair sampler (fun _ _ => True) t.clauses
+
+-- if two rules match, a `unique` decision reports a violation
+theorem eval_unique_of_two {C A : Type} [Fintype C] [Fintype A] {t : Table dmn C A}
+    {i : Is dmn C} (h : 2 ≤ (t.matching i).length) (a : A) :
+    (⟨t, .unique⟩ : Decision C A).eval i a = .violation := by
+  unfold Decision.eval
+  cases hm : t.matching i with
+  | nil => simp [hm] at h
+  | cons _ rest =>
+    cases rest with
+    | nil => simp [hm] at h
+    | cons _ _ => rfl
+
+-- soundness: a reported input really does cause a violation
+theorem findUniqueConflict_sound {C A : Type} [Fintype C] [Fintype A] {t : Table dmn C A}
+    {k k' : Clause dmn C A} {i : Is dmn C}
+    (h : findUniqueConflict t = some (k, k', i)) (a : A) :
+    (⟨t, .unique⟩ : Decision C A).eval i a = .violation := by
+  obtain ⟨hsub, -, -, hk, hk'⟩ := findPair_sound h
+  have hfilter : [k, k'].filter (fun r => decide (r.Invoked i)) = [k, k'] := by
+    simp [hk, hk']
+  have hmatch : [k, k'].Sublist (t.matching i) := by
+    have := hsub.filter (fun r => decide (r.Invoked i))
+    rw [hfilter] at this
+    exact this
+  exact eval_unique_of_two hmatch.length_le a
+
+-- completeness: if nothing is reported, the table is `Unique`
+theorem findUniqueConflict_none {C A : Type} [Fintype C] {t : Table dmn C A}
+    (h : findUniqueConflict t = none) :
+    Unique t :=
+  (findPair_none h).imp fun hR => hR trivial
+
+-- so if nothing is reported, no input ever causes a violation
+theorem findUniqueConflict_none_never_violates {C A : Type} [Fintype C] [Fintype A]
+    {t : Table dmn C A}
+    (h : findUniqueConflict t = none) (i : Is dmn C) (a : A) :
+    (⟨t, .unique⟩ : Decision C A).eval i a ≠ .violation :=
+  eval_unique_ne_violation rfl (findUniqueConflict_none h) i a
+
 /-! ## A minimal example -/
 
 inductive TicketCond where
@@ -431,6 +546,14 @@ theorem ticketFixed_twelve :
       .one (some (.int 10)) := by
   decide
 
+-- the search finds the overlap at age 12
+theorem ticketBuggy_conflict :
+    (findUniqueConflict ticketBuggy).map (fun r => r.2.2 .age) = some (.int 12) := by
+  decide
+
+theorem ticketFixed_conflict : (findUniqueConflict ticketFixed).isNone := by
+  decide
+
 -- under 12 pay 5, 12 to 64 pay 10, and a catch-all meant as "otherwise, pay 8"
 def ticketWithDefault : Table dmn TicketCond TicketAsrt :=
   ⟨[priceRule (.lt 12) 5, priceRule (.range 12 64 true true) 10, priceRule .any 8]⟩
@@ -450,6 +573,14 @@ theorem ticketWithDefault_picks :
       .one (some (.int 10)) ∧
     (⟨ticketWithDefault, .first⟩ : Decision TicketCond TicketAsrt).eval (visitor 70) .price =
       .one (some (.int 8)) := by
+  decide
+
+-- the general search for disagreeing rules: an 11-year-old matches the first rule (5)
+-- and the catch-all (8)
+theorem ticketWithDefault_conflict :
+    (ticketWithDefault.findConflict sampler .price).map
+      (fun r => (r.1.asserts .price, r.2.1.asserts .price, r.2.2 .age)) =
+    some (some (.int 5), some (.int 8), .int 11) := by
   decide
 
 /-! ## Discount example -/
@@ -619,5 +750,160 @@ theorem loanGrade_gap :
     (⟨loanGrade, .unique⟩ : Decision LoanCond LoanAsrt).eval (applicant 200 2000) .grade =
       .noMatch := by
   decide
+
+/-! ## Freight example: a single conflicting input -/
+
+inductive FreightCond where
+  | weight | declaredValue | region | hazmat
+  deriving DecidableEq
+
+instance : Fintype FreightCond where
+  elems := {FreightCond.weight, FreightCond.declaredValue, FreightCond.region, FreightCond.hazmat}
+  complete := by
+    intro c
+    cases c <;> simp
+
+inductive FreightAsrt where
+  | surcharge
+  deriving DecidableEq
+
+instance : Fintype FreightAsrt where
+  elems := {FreightAsrt.surcharge}
+  complete := by
+    intro a
+    cases a
+    simp
+
+-- a row: weight (kg), declared value, region, hazardous goods, surcharge
+def freightRule (eWeight eValue eRegion eHazmat : Test) (surcharge : Int) :
+    Clause dmn FreightCond FreightAsrt where
+  expects
+    | .weight => eWeight
+    | .declaredValue => eValue
+    | .region => eRegion
+    | .hazmat => eHazmat
+  asserts
+    | .surcharge => some (.int surcharge)
+
+def mainRegions : Test := .oneOf [.str "EU", .str "APAC", .str "LATAM"]
+
+-- light, high-value goods to the main regions
+def lightHighValue := freightRule (.range 0 1000 true true) (.range 50000 200000 true true)
+  mainRegions .any 50
+-- light, low-value goods to the main regions
+def lightLowValue := freightRule (.range 0 999 true true) (.lt 50000) mainRegions .any 20
+-- heavy goods anywhere
+def heavy := freightRule (.gt 5000) .any .any .any 200
+-- North America, up to 5000 kg
+def northAmerica := freightRule (.range 0 5000 true true) .any (.eq (.str "NA")) .any 30
+
+-- hazardous goods to APAC, 1000–5000 kg, low value: `< 50001` is an off-by-one
+def apacHazmatBuggy :=
+  freightRule (.range 1000 5000 true true) (.lt 50001) (.eq (.str "APAC")) (.eq (.bool true)) 120
+def apacHazmatFixed :=
+  freightRule (.range 1000 5000 true true) (.lt 50000) (.eq (.str "APAC")) (.eq (.bool true)) 120
+
+def freightBuggy : Table dmn FreightCond FreightAsrt :=
+  ⟨[lightHighValue, lightLowValue, heavy, northAmerica, apacHazmatBuggy]⟩
+
+def freightFixed : Table dmn FreightCond FreightAsrt :=
+  ⟨[lightHighValue, lightLowValue, heavy, northAmerica, apacHazmatFixed]⟩
+
+-- observed weight, declared value, region, hazardous goods
+def shipment (oWeight oValue : Int) (oRegion : String) (oHazmat : Bool) : Is dmn FreightCond
+  | .weight => .int oWeight
+  | .declaredValue => .int oValue
+  | .region => .str oRegion
+  | .hazmat => .bool oHazmat
+
+theorem freightBuggy_not_unique : ¬ Unique freightBuggy := by
+  decide
+
+theorem freightBuggy_violation :
+    (⟨freightBuggy, .unique⟩ : Decision FreightCond FreightAsrt).eval
+      (shipment 1000 50000 "APAC" true) .surcharge = .violation := by
+  decide
+
+theorem freight_weight_iff (w : Value) :
+    passes (.range 0 1000 true true) w ∧ passes (.range 1000 5000 true true) w ↔
+      w = .int 1000 := by
+  cases w with
+  | int m =>
+    simp only [passes, Value.int.injEq]
+    omega
+  | str _ => simp [passes]
+  | bool _ => simp [passes]
+
+theorem freight_value_iff (w : Value) :
+    passes (.range 50000 200000 true true) w ∧ passes (.lt 50001) w ↔ w = .int 50000 := by
+  cases w with
+  | int m =>
+    simp only [passes, Value.int.injEq]
+    omega
+  | str _ => simp [passes]
+  | bool _ => simp [passes]
+
+theorem freight_region_iff (w : Value) :
+    passes mainRegions w ∧ passes (.eq (.str "APAC")) w ↔ w = .str "APAC" := by
+  constructor
+  · intro h
+    exact h.2
+  · intro h
+    subst h
+    exact ⟨by decide, rfl⟩
+
+theorem freight_hazmat_iff (w : Value) :
+    passes .any w ∧ passes (.eq (.bool true)) w ↔ w = .bool true :=
+  ⟨fun h => h.2, fun h => ⟨trivial, h⟩⟩
+
+-- the two rules match the same input at exactly one point
+theorem freight_overlap_exactly (i : Is dmn FreightCond) :
+    lightHighValue.Invoked i ∧ apacHazmatBuggy.Invoked i ↔
+      i .weight = .int 1000 ∧ i .declaredValue = .int 50000 ∧
+        i .region = .str "APAC" ∧ i .hazmat = .bool true := by
+  constructor
+  · intro ⟨h₁, h₂⟩
+    exact ⟨(freight_weight_iff _).mp ⟨h₁ .weight, h₂ .weight⟩,
+      (freight_value_iff _).mp ⟨h₁ .declaredValue, h₂ .declaredValue⟩,
+      (freight_region_iff _).mp ⟨h₁ .region, h₂ .region⟩,
+      (freight_hazmat_iff _).mp ⟨h₁ .hazmat, h₂ .hazmat⟩⟩
+  · intro ⟨hw, hv, hr, hh⟩
+    have hw' := (freight_weight_iff _).mpr hw
+    have hv' := (freight_value_iff _).mpr hv
+    have hr' := (freight_region_iff _).mpr hr
+    have hh' := (freight_hazmat_iff _).mpr hh
+    constructor
+    · intro c
+      cases c
+      · exact hw'.1
+      · exact hv'.1
+      · exact hr'.1
+      · exact hh'.1
+    · intro c
+      cases c
+      · exact hw'.2
+      · exact hv'.2
+      · exact hr'.2
+      · exact hh'.2
+
+-- the search finds the two rules (surcharges 50 and 120) and that exact input
+theorem freightBuggy_conflict :
+    (findUniqueConflict freightBuggy).map
+      (fun r => (r.1.asserts .surcharge, r.2.1.asserts .surcharge,
+        r.2.2 .weight, r.2.2 .declaredValue, r.2.2 .region, r.2.2 .hazmat)) =
+    some (some (.int 50), some (.int 120),
+      .int 1000, .int 50000, .str "APAC", .bool true) := by
+  decide
+
+-- after the fix the search finds nothing, so no shipment ever causes a violation
+theorem freightFixed_conflict : (findUniqueConflict freightFixed).isNone := by
+  decide
+
+theorem freightFixed_unique : Unique freightFixed := by
+  decide
+
+theorem freightFixed_never_violates (i : Is dmn FreightCond) (a : FreightAsrt) :
+    (⟨freightFixed, .unique⟩ : Decision FreightCond FreightAsrt).eval i a ≠ .violation :=
+  eval_unique_ne_violation rfl freightFixed_unique i a
 
 end Maize.DMN

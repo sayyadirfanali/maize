@@ -295,6 +295,57 @@ theorem container_not_decisive_insurance : ¬ container.Decisive Definite .insur
   rw [decisive_iff]
   decide
 
+/-! ## Finding choice points -/
+
+-- a definite state that both `e` and `e'` hit: YES if possible, otherwise NO
+def pickDefinite (e e' : State) : Option State :=
+  if hit e .yes ∧ hit e' .yes then some .yes
+  else if hit e .no ∧ hit e' .no then some .no
+  else none
+
+theorem pickDefinite_sound :
+    ∀ e e' o, pickDefinite e e' = some o → Definite o ∧ hit e o ∧ hit e' o := by
+  decide
+
+theorem pickDefinite_complete :
+    ∀ e e', (∃ o, Definite o ∧ hit e o ∧ hit e' o) → (pickDefinite e e').isSome := by
+  decide
+
+-- with definite facts, DWDS picks YES or NO condition by condition
+def definiteSampler : dwds.Sampler Definite where
+  sample := pickDefinite
+  sound h := pickDefinite_sound _ _ _ h
+  complete h := pickDefinite_complete _ _ h
+
+-- in the minimal example, loaded and locked is where the stevedore is left to a human
+theorem mini_choice :
+    (mini.findConflict definiteSampler .stevedore).map
+      (fun r => (r.1.asserts .stevedore, r.2.1.asserts .stevedore,
+        r.2.2 .loaded, r.2.2 .locked)) =
+    some (.must, .may, .yes, .yes) := by
+  decide
+
+-- stevedore: scenarios A (SHOULD) and B (MAY), when not loaded, not inspected and locked
+theorem container_stevedore_choice :
+    (container.findConflict definiteSampler .stevedore).map
+      (fun r => (r.1.asserts .stevedore, r.2.1.asserts .stevedore,
+        r.2.2 .loaded, r.2.2 .inspected, r.2.2 .locked)) =
+    some (.should, .may, .no, .no, .yes) := by
+  decide
+
+-- insurance: scenarios B (MUST) and D (MAY), in the situation of Figure 31
+theorem container_insurance_choice :
+    (container.findConflict definiteSampler .insurance).map
+      (fun r => (r.1.asserts .insurance, r.2.1.asserts .insurance,
+        r.2.2 .loaded, r.2.2 .inspected, r.2.2 .locked)) =
+    some (.must, .may, .yes, .no, .yes) := by
+  decide
+
+-- the lights: nothing is found, so they never need a human decision
+theorem container_green_no_choice :
+    (container.findConflict definiteSampler .green).isNone := by
+  decide
+
 /-! ## Findings -/
 
 -- decisiveness is per assertion: in example B the green and red lights are both MUST
