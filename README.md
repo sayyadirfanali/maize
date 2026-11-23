@@ -196,7 +196,9 @@ lake build
 ## How This Was Made
 
 I designed the model and the semantics, including what a table means, what to prove, and how to read DMN and DWDS into a generalised table.
+
 I wrote a few core proofs myself, and used Claude and Gemini to help draft several other proofs and examples. Claude and Gemini also helped in drafting this README.
+
 I personally audited every definition and theorem statement to verify that they faithfully capture the intended semantics (proof correctness is obviously guaranteed by the Lean kernel).
 
 ## Contact

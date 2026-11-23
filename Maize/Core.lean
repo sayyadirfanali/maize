@@ -243,8 +243,7 @@ theorem Table.append_self (t : Table L Condition Assertion) : (t.append t).Equiv
 /-! ## Co-invocation is decided row by row -/
 
 theorem Clause.coInvocable_iff (P : L.Observed → Prop) (k k' : Clause L Condition Assertion) :
-    k.CoInvocable P k' ↔
-      ∀ c, ∃ o, P o ∧ L.hit (k.expects c) o ∧ L.hit (k'.expects c) o := by
+    k.CoInvocable P k' ↔ ∀ c, ∃ o, P o ∧ L.hit (k.expects c) o ∧ L.hit (k'.expects c) o := by
   constructor
   · intro hco c
     obtain ⟨i, hsat, hinv, hinv'⟩ := hco
@@ -380,19 +379,22 @@ theorem Table.ought_comap {Condition' Assertion' : Type} {f : Condition' → Con
 
 /-! ## Translating tables between logics -/
 
--- `fE` and `fO` keep hit: invocation is unchanged
-theorem Clause.invoked_map {L' : Logic} {fE : L.Expected → L'.Expected}
+-- `fE` and `fO` keep `hit` -> invocation is unchanged
+theorem Clause.invoked_map {L' : Logic}
+    {fE : L.Expected → L'.Expected}
     {fO : L.Observed → L'.Observed}
     (hf : ∀ e o, L'.hit (fE e) (fO o) ↔ L.hit e o)
-    (g : L.Mode → L'.Mode) (k : Clause L Condition Assertion) (i : Is L Condition) :
+    (g : L.Mode → L'.Mode)
+    (k : Clause L Condition Assertion)
+    (i : Is L Condition) :
     (k.map fE g).Invoked (fO ∘ i) ↔ k.Invoked i :=
   forall_congr' fun c => hf (k.expects c) (i c)
 
-theorem Table.ought_map {L' : Logic} {fE : L.Expected → L'.Expected}
-    {fO : L.Observed → L'.Observed} {g : L.Mode → L'.Mode}
-    (hf : ∀ e o, L'.hit (fE e) (fO o) ↔ L.hit e o)    -- `fE`, `fO` keep hit
-    (hg : Function.Injective g)
-    (habsent : ∀ m, g m = L'.absent ↔ m = L.absent)    -- `g` keeps `absent`
+theorem Table.ought_map {L' : Logic}
+    {fE : L.Expected → L'.Expected} {fO : L.Observed → L'.Observed} {g : L.Mode → L'.Mode}
+    (hf : ∀ e o, L'.hit (fE e) (fO o) ↔ L.hit e o) -- `fE`, `fO` keep hit
+    (hg : Function.Injective g) -- g x = g y -> x = y
+    (habsent : ∀ m, g m = L'.absent ↔ m = L.absent) -- `g` keeps `absent`
     (t : Table L Condition Assertion) (i : Is L Condition) (a : Assertion) (m : L.Mode) :
     (t.map fE g).Ought (fO ∘ i) a (g m) ↔ t.Ought i a m := by
   constructor
@@ -531,7 +533,7 @@ theorem Clause.witness_sound [Fintype Condition] {P : L.Observed → Prop} {s : 
 -- if facts satisfying `P` can invoke both clauses, a witness is found
 theorem Clause.witness_complete [Fintype Condition] {P : L.Observed → Prop} {s : L.Sampler P}
     {k k' : Clause L Condition Assertion}
-    (hco : k.CoInvocable P k') :
+    (hco : k.CoInvocable P k')  :
     ∃ i, k.witness s k' = some i := by
   have hall : ∀ c, (s.sample (k.expects c) (k'.expects c)).isSome := fun c =>
     s.complete ((Clause.coInvocable_iff P k k').mp hco c)
