@@ -123,13 +123,13 @@ Maize encodes the eight-scenario shipping container gate from Figure 28 of Potvi
 
 It also reproduces the worked examples from Figures 30 and 31 (`DWDS.exampleA`, `DWDS.exampleB`).
 
-Searching across all definite (`YES`/`NO`) facts proves that the green, yellow, and red lights never require a human decision (`DWDS.container_decisive_green`, `DWDS.container_decisive_yellow`, `DWDS.container_decisive_red`).
+With definite (`YES`/`NO`) facts, the green, yellow, and red lights never receive conflicting modes (`DWDS.container_decisive_green`, `DWDS.container_decisive_yellow`, `DWDS.container_decisive_red`).
 
 It also uncovers a stevedore choice point (`DWDS.container_stevedore_choice`) when a container is not loaded, not inspected, and locked, alongside the Figure 31 insurance conflict (`DWDS.container_insurance_choice`).
 
-Conflicts are checked one output row at a time. Because of this, Maize also shows that in Figure 31 both the green light and the red light are individually unambiguous (`MUST`) at the same time (`DWDS.exampleB_green_and_red`).
+Conflicts one checked one output row at a time. The thesis, though, treats Figure 31's green MUST (scenario B) and red MUST (scenario D) as a choice for a person. Maize can't see that choice, because green and red are separate outputs (`DWDS.exampleB_green_and_red`).
 
-Questions the formalisation raised about DWDS are documented in [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md). These cover `YES-AND-NO` against `YES-OR-NO`, whether `NOT` always means silence, simultaneous green and red lights, and Rule 256.
+Questions the formalisation raised about DWDS are documented in OPEN_QUESTIONS.md. These cover YES-AND-NO against YES-OR-NO, whether NOT always means silence, catch-all scenarios, and Rule 256.
 
 ### Theorems Proved for DWDS
 
