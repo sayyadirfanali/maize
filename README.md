@@ -10,6 +10,7 @@ A decision table encodes conditional logic as a grid instead of nested `if`/`the
 
 Formalising the semantics in Lean gives three guarantees that testing cannot:
 
+
 1. **Sound and complete conflict search:** Any input Maize reports genuinely triggers a conflict, and returning `none` proves no input in the modelled domain can trigger one.
 2. **Verified evaluators:** Maize's executable evaluators are proved to agree with the mathematical specification.
 3. **Safe transformations:** Reordering clauses, removing duplicates, merging tables, renaming columns (onto), and translating between logics are proved to preserve the per-assertion semantics.
@@ -44,12 +45,12 @@ A format only needs to supply one small helper that takes two input cells and re
 | Clause | Rule (row) | Scenario (column) |
 | Condition | Input column | Input condition |
 | Assertion | Output column | Output assertion |
-| Expected state | Cell test (comparisons, ranges, lists) | Scenario cell (`00`, `01`, `10`, `11`) |
-| Observed state | Input value (integer, string, boolean) | `Fact` (`yes`, `no`) |
+| Expected state | Cell test (comparisons, ranges, lists) | Scenario element (`00`, `01`, `10`, `11`) |
+| Observed state | Input value (integer, string, boolean) | Sieve element (`Fact`: `yes`, `no`) |
 | Output mode | Output value (or none) | Normative mode (`NOT`, `MUST`, `MAY`, `SHOULD`) |
 | Absent mode | Empty output (`none`) | `NOT` (`00`) |
 | Bundled outcomes | Matching output rows | Invoked scenario bundles |
-| Choice | Disagreeing matching rows | Choice point left to a human |
+| Choice | Disagreeing matching rows | Decision left to the rule-taker |
 | Hit policy | `unique`, `any`, `first`, `collect`, `ruleOrder` | None (all matching scenarios kept) |
 
 ---
@@ -70,6 +71,7 @@ To search for overlaps over infinitely many integers and strings, Maize normalis
 
 ![DMN Ticket Price Table](docs/DMN.svg)
 
+
 - **Finding a bug:** On the buggy ticket table (`<= 12` vs. `>= 12`), Maize extracts age `12` and proves that evaluation under `unique` fails with a violation.
 - **Proving the fix:** Changing `<= 12` to `< 12` makes the search return `none`, proving that no input can ever cause a violation.
 - **Catch-all rules:** Adding a trailing wildcard (`-`) rule of `8` shows that a catch-all acts as an "else" only under `first`. Under `unique` and `any` it causes a violation wherever it overlaps an earlier rule, and under `collect` it fires alongside earlier matches.
@@ -78,7 +80,7 @@ To search for overlaps over infinitely many integers and strings, Maize normalis
 
 The [Data With Direction Specification](https://gitlab.com/xalgorithms-alliance/data-with-direction-specification/dwds-documents/-/tree/master/current) (detailed in Joseph Potvin's 2023 DBA thesis) is a tabular format for expressing laws, policies, and contracts as data. In DWDS, a rule contains a vertical logic gate whose columns are **scenarios**.
 
-Maize models the logic gate's matching stage (§5.3.9, §5.5.3), abstracting away natural-language sentence structure, arithmetic/lookups, and network metadata. Each cell in a scenario uses a two-bit code:
+Maize models the logic gate's sifting stage (§5.3.9, §5.5.3), abstracting away natural-language sentence structure, arithmetic/lookups, and network metadata. Each cell in a scenario uses a two-bit code:
 
 | Code | Input Condition Cell | Output Assertion Mode |
 | :--- | :--- | :--- |
@@ -87,16 +89,18 @@ Maize models the logic gate's matching stage (§5.3.9, §5.5.3), abstracting awa
 | `10` | `YES-AND-NO` (both) | `MAY` |
 | `11` | `YES-OR-NO` (unsure) | `SHOULD` |
 
-- **Matching facts:** Following the worked examples in §5.5.3 (Figures 30 and 31), observed facts are modelled as `YES`/`NO` (`Fact`). `YES` matches `YES`, `NO` matches `NO`, and `YES-AND-NO` / `YES-OR-NO` match either.
+
+- **Matching facts:** Following the worked examples in §5.5.3 (Figures 30 and 31), sieve elements (observed facts) are modelled as `YES`/`NO` (`Fact`). `YES` matches `YES`, `NO` matches `NO`, and `YES-AND-NO` / `YES-OR-NO` match either.
 - **Output modes:** In full DWDS, each output assertion is a declarative sentence (which can carry text, numbers, or formulas). In each scenario, that sentence's cell gives a normative mode (`NOT`, `MUST`, `MAY`, or `SHOULD`). Maize abstracts over the sentence text to model the mode-level logic.
-- **Human choice instead of hit policies:** DWDS does not discard matching scenarios. Every matching scenario produces a complete bundle of output modes; when two matching scenarios produce different bundles, the choice is left to a human.
+- **A decision for the rule-taker instead of hit policies:** DWDS does not discard matching scenarios. Every matching scenario produces a complete bundle of output modes; when two matching scenarios produce different bundles, the decision is left to the rule-taker (human or machine).
 
 #### Example: Shipping Container Gate (Potvin 2023, Figures 28, 30, 31)
 
 ![DWDS Shipping Container Logic Gate](docs/DWDS.svg)
 
-- **Figure 30:** Not loaded, inspected, not locked invokes only Scenario C, with no human choice.
-- **Figure 31:** Loaded, not inspected, locked invokes both Scenarios B and D. Maize keeps them as two separate bundles (`green: MUST, stevedore: MAY, insurance: MUST` vs. `red: MUST, stevedore: MUST, insurance: MAY`), preserving the human choice point.
+
+- **Figure 30:** Not loaded, inspected, not locked invokes only Scenario C, with no decision for the rule-taker.
+- **Figure 31:** Loaded, not inspected, locked invokes both Scenarios B and D. Maize keeps them as two separate bundles (`green: MUST, stevedore: MAY, insurance: MUST` vs. `red: MUST, stevedore: MUST, insurance: MAY`), preserving the decision for the rule-taker.
 - **Undocumented choice point:** Automated search discovers a choice point not discussed in the thesis: not loaded, not inspected, and locked invokes both Scenarios A and B (`exampleAB`, `container_choice`). The search also finds per-assertion conflicts: stevedore (A against B) and insurance (B against D, in Figure 31).
 - **Catch-all scenarios:** Appending a catch-all `YES-OR-NO` scenario for a yellow light does not act as an "else." It fires alongside Scenarios B and D, adding a third bundle.
 
@@ -126,6 +130,7 @@ The general theorems hold for every table and every input in the modelled domain
 
 ## Out of Scope
 
+
 - **DMN:** Negated tests (`not(...)`), decimals, dates/times, `null` inputs, `priority` and `output order` hit policies, `collect` aggregations, default outputs, and whole-row `collect`/`ruleOrder` results for multi-output tables (currently returned per column).
 - **DWDS:** Four-valued observed facts (`YES-AND-NO` / `YES-OR-NO` in `[is.dwd]`), RuleReserve `in effect` and `applicable` metadata sifting, natural-language sentence syntax, arithmetic/lookup evaluation, and multi-table pipelines.
 - **Parsing:** Tables are written directly in Lean rather than parsed from DMN XML or `.dwd` JSON/CBOR files.
@@ -143,10 +148,9 @@ lake build
 
 ## Notes
 
-I designed the model, its semantics and abstractions, and reviewed every definition and theorem statement. Claude and Gemini drafted much of the Lean proof code and documentation; all proofs are checked by the Lean kernel.
+I designed the model, its semantics and abstractions, proved few core proofs, and reviewed every definition and theorem statement. Claude and Gemini drafted most of other Lean proofs and documentation. All proofs are checked by the Lean kernel.
 
-## License
 
-MIT License (see `LICENSE`).
+## Contact
 
-**Contact:** Irfan Ali | [irfan@irfanali.org](mailto:irfan@irfanali.org)
+Irfan Ali | [irfan@irfanali.org](mailto:irfan@irfanali.org)
