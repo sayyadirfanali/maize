@@ -4,7 +4,7 @@ import Maize.Core
 
 namespace Maize.DMN
 
-/-! ## Values and tests -/
+/-! ## Logic -/
 
 inductive Value where
   | int (n : Int)
@@ -39,7 +39,7 @@ def passes : Test → Value → Prop
   | .oneOf vs, w => w ∈ vs
   | _, _ => False
 
-/-! ## Shapes: what a test passes -/
+/-! ## Shapes -/
 
 -- `m` is at least the lower bound `lo`, if there is one
 def Above (lo : Option Int) (m : Int) : Prop :=
@@ -122,7 +122,7 @@ instance {C A : Type} [Fintype C] (k : Clause dmn C A) (i : Is dmn C) :
 instance {C A : Type} (a : A) (k k' : Clause dmn C A) : Decidable (k.Disagree a k') :=
   inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
-/-! ## Overlap of two tests -/
+/-! ## Overlapping Tests -/
 
 -- the larger of two lower bounds
 def maxLo : Option Int → Option Int → Option Int
@@ -221,7 +221,7 @@ theorem decisive_iff {C A : Type} (t : Table dmn C A) (a : A) :
         k.Disagree a k' → ∃ c, ¬ (k.expects c).Overlap (k'.expects c) :=
   Table.decisive_iff_rows (fun e e' => by simp [Test.Overlap]) t a
 
-/-! ## Picking results -/
+/-! ## Picking Results -/
 
 -- how a decision picks its result from the matching rules (DMN calls this the hit policy)
 inductive Pick where
@@ -266,7 +266,7 @@ def Decision.eval {C A : Type} [Fintype C] [Fintype A] (d : Decision C A) (i : I
     | .collect => .many ((k :: rest).map (·.asserts a))
     | .ruleOrder => .many ((k :: rest).map (·.asserts a))
 
-/-! ## Checking tables before evaluation -/
+/-! ## Checking Tables -/
 
 -- no two rules of `t`, by position, can match together
 def Unique {C A : Type} (t : Table dmn C A) : Prop :=
@@ -366,7 +366,7 @@ theorem eval_first_catchAll {C A : Type} [Fintype C] [Fintype A] (t : Table dmn 
   rw [hmatch]
   cases t.matching i <;> rfl
 
-/-! ## Finding a conflicting input -/
+/-! ## Finding a Conflict -/
 
 -- a value in `s`, if there is one
 def Shape.sample : Shape → Option Value
@@ -481,7 +481,7 @@ theorem findUniqueConflict_none_never_violates {C A : Type} [Fintype C] [Fintype
     (⟨t, .unique⟩ : Decision C A).eval i a ≠ .violation :=
   eval_unique_ne_violation rfl (findUniqueConflict_none h) i a
 
-/-! ## A minimal example -/
+/-! ## Example: Ticket Prices -/
 
 inductive TicketCond where
   | age
@@ -582,328 +582,5 @@ theorem ticketWithDefault_conflict :
       (fun r => (r.1.asserts .price, r.2.1.asserts .price, r.2.2 .age)) =
     some (some (.int 5), some (.int 8), .int 11) := by
   decide
-
-/-! ## Discount example -/
-
-inductive Cond where
-  | customer | size
-  deriving DecidableEq
-
-instance : Fintype Cond where
-  elems := {Cond.customer, Cond.size}
-  complete := by
-    intro c
-    cases c <;> simp
-
-inductive Asrt where
-  | discount
-  deriving DecidableEq
-
-instance : Fintype Asrt where
-  elems := {Asrt.discount}
-  complete := by
-    intro a
-    cases a
-    simp
-
--- a row: customer test, order-size test, discount (%)
-def rule (eCustomer eSize : Test) (discount : Int) : Clause dmn Cond Asrt where
-  expects
-    | .customer => eCustomer
-    | .size => eSize
-  asserts
-    | .discount => some (.int discount)
-
-def discount : Table dmn Cond Asrt := ⟨[
-  rule (.eq (.str "Business")) (.lt 10) 5,
-  rule (.eq (.str "Business")) (.ge 10) 10,
-  rule (.eq (.str "Private"))  .any     0
-]⟩
-
--- observed customer and order size
-def observe (oCustomer : String) (oSize : Int) : Is dmn Cond
-  | .customer => .str oCustomer
-  | .size => .int oSize
-
-theorem discount_examples :
-    discount.execute (observe "Business" 3) .discount = [some (.int 5)] ∧
-    discount.execute (observe "Business" 12) .discount = [some (.int 10)] ∧
-    discount.execute (observe "Private" 12) .discount = [some (.int 0)] ∧
-    discount.execute (observe "Other" 12) .discount = [] := by
-  decide
-
--- no input makes the discount ambiguous
-theorem discount_decisive : discount.Decisive (fun _ => True) .discount := by
-  rw [decisive_iff]
-  decide
-
--- no two rules can match together, so the table is valid with `unique`
-theorem discount_unique : Unique discount := by
-  decide
-
--- as a `unique` decision it never reports a violation
-theorem discount_never_violates (i : Is dmn Cond) (a : Asrt) :
-    (⟨discount, .unique⟩ : Decision Cond Asrt).eval i a ≠ .violation :=
-  eval_unique_ne_violation rfl discount_unique i a
-
--- a catch-all meant as "otherwise, no discount"
-def withDefault : Table dmn Cond Asrt :=
-  discount.append ⟨[rule .any .any 0]⟩
-
--- it fires next to the business rules, so the discount becomes ambiguous
-theorem withDefault_not_decisive : ¬ withDefault.Decisive (fun _ => True) .discount := by
-  rw [decisive_iff]
-  decide
-
-theorem withDefault_not_unique : ¬ Unique withDefault := by
-  decide
-
--- the same table under each pick, for a business order of 12 and an unknown customer
-theorem withDefault_picks :
-    (⟨withDefault, .unique⟩ : Decision Cond Asrt).eval (observe "Business" 12) .discount =
-      .violation ∧
-    (⟨withDefault, .any⟩ : Decision Cond Asrt).eval (observe "Business" 12) .discount =
-      .violation ∧
-    (⟨withDefault, .first⟩ : Decision Cond Asrt).eval (observe "Business" 12) .discount =
-      .one (some (.int 10)) ∧
-    (⟨withDefault, .first⟩ : Decision Cond Asrt).eval (observe "Other" 12) .discount =
-      .one (some (.int 0)) ∧
-    (⟨withDefault, .collect⟩ : Decision Cond Asrt).eval (observe "Business" 12) .discount =
-      .many [some (.int 10), some (.int 0)] := by
-  decide
-
--- with `first`, putting the catch-all first changes the answer
-theorem first_depends_on_order :
-    (⟨⟨rule .any .any 0 :: discount.clauses⟩, .first⟩ : Decision Cond Asrt).eval
-      (observe "Business" 12) .discount = .one (some (.int 0)) := by
-  decide
-
-/-! ## Loan grade example (Calvanese et al., BPM 2016, Table 1) -/
-
-inductive LoanCond where
-  | income | loan
-  deriving DecidableEq
-
-instance : Fintype LoanCond where
-  elems := {LoanCond.income, LoanCond.loan}
-  complete := by
-    intro c
-    cases c <;> simp
-
-inductive LoanAsrt where
-  | grade
-  deriving DecidableEq
-
-instance : Fintype LoanAsrt where
-  elems := {LoanAsrt.grade}
-  complete := by
-    intro a
-    cases a
-    simp
-
--- a row: annual-income test, loan-size test, grade
-def gradeRule (eIncome eLoan : Test) (grade : String) : Clause dmn LoanCond LoanAsrt where
-  expects
-    | .income => eIncome
-    | .loan => eLoan
-  asserts
-    | .grade => some (.str grade)
-
-def ruleA := gradeRule (.range 0 1000 true true) (.range 0 1000 true true) "VG"
-def ruleB := gradeRule (.range 250 750 true true) (.range 4000 5000 true true) "G"
-def ruleC := gradeRule (.range 500 1500 true true) (.range 500 3000 true true) "F"
-def ruleD := gradeRule (.range 2000 2500 true true) (.range 0 2000 true true) "P"
-
--- declared unique (U) and complete (C)
-def loanGrade : Table dmn LoanCond LoanAsrt := ⟨[ruleA, ruleB, ruleC, ruleD]⟩
-
--- observed annual income and loan size
-def applicant (oIncome oLoan : Int) : Is dmn LoanCond
-  | .income => .int oIncome
-  | .loan => .int oLoan
-
--- as reported: A and C overlap, so the table is not unique
-theorem loanGrade_A_C_overlap : ruleA.CoInvocable (fun _ => True) ruleC := by
-  decide
-
-theorem loanGrade_not_unique : ¬ Unique loanGrade := by
-  decide
-
--- and it is the only overlap: dropping either A or C makes the table unique
-theorem loanGrade_only_A_C :
-    Unique ⟨[ruleB, ruleC, ruleD]⟩ ∧ Unique ⟨[ruleA, ruleB, ruleD]⟩ := by
-  decide
-
--- A says VG and C says F, so the overlap is also a disagreement
-theorem loanGrade_not_decisive : ¬ loanGrade.Decisive (fun _ => True) .grade := by
-  rw [decisive_iff]
-  decide
-
--- inside the intersection [500..1000] × [500..1000] evaluation reports a violation
-theorem loanGrade_violation :
-    (⟨loanGrade, .unique⟩ : Decision LoanCond LoanAsrt).eval (applicant 750 750) .grade =
-      .violation := by
-  decide
-
--- as reported: ⟨200, 2000⟩ matches no rule, so the table is not complete
-theorem loanGrade_gap :
-    (⟨loanGrade, .unique⟩ : Decision LoanCond LoanAsrt).eval (applicant 200 2000) .grade =
-      .noMatch := by
-  decide
-
-/-! ## Freight example: a single conflicting input -/
-
-inductive FreightCond where
-  | weight | declaredValue | region | hazmat
-  deriving DecidableEq
-
-instance : Fintype FreightCond where
-  elems := {FreightCond.weight, FreightCond.declaredValue, FreightCond.region, FreightCond.hazmat}
-  complete := by
-    intro c
-    cases c <;> simp
-
-inductive FreightAsrt where
-  | surcharge
-  deriving DecidableEq
-
-instance : Fintype FreightAsrt where
-  elems := {FreightAsrt.surcharge}
-  complete := by
-    intro a
-    cases a
-    simp
-
--- a row: weight (kg), declared value, region, hazardous goods, surcharge
-def freightRule (eWeight eValue eRegion eHazmat : Test) (surcharge : Int) :
-    Clause dmn FreightCond FreightAsrt where
-  expects
-    | .weight => eWeight
-    | .declaredValue => eValue
-    | .region => eRegion
-    | .hazmat => eHazmat
-  asserts
-    | .surcharge => some (.int surcharge)
-
-def mainRegions : Test := .oneOf [.str "EU", .str "APAC", .str "LATAM"]
-
--- light, high-value goods to the main regions
-def lightHighValue := freightRule (.range 0 1000 true true) (.range 50000 200000 true true)
-  mainRegions .any 50
--- light, low-value goods to the main regions
-def lightLowValue := freightRule (.range 0 999 true true) (.lt 50000) mainRegions .any 20
--- heavy goods anywhere
-def heavy := freightRule (.gt 5000) .any .any .any 200
--- North America, up to 5000 kg
-def northAmerica := freightRule (.range 0 5000 true true) .any (.eq (.str "NA")) .any 30
-
--- hazardous goods to APAC, 1000–5000 kg, low value: `< 50001` is an off-by-one
-def apacHazmatBuggy :=
-  freightRule (.range 1000 5000 true true) (.lt 50001) (.eq (.str "APAC")) (.eq (.bool true)) 120
-def apacHazmatFixed :=
-  freightRule (.range 1000 5000 true true) (.lt 50000) (.eq (.str "APAC")) (.eq (.bool true)) 120
-
-def freightBuggy : Table dmn FreightCond FreightAsrt :=
-  ⟨[lightHighValue, lightLowValue, heavy, northAmerica, apacHazmatBuggy]⟩
-
-def freightFixed : Table dmn FreightCond FreightAsrt :=
-  ⟨[lightHighValue, lightLowValue, heavy, northAmerica, apacHazmatFixed]⟩
-
--- observed weight, declared value, region, hazardous goods
-def shipment (oWeight oValue : Int) (oRegion : String) (oHazmat : Bool) : Is dmn FreightCond
-  | .weight => .int oWeight
-  | .declaredValue => .int oValue
-  | .region => .str oRegion
-  | .hazmat => .bool oHazmat
-
-theorem freightBuggy_not_unique : ¬ Unique freightBuggy := by
-  decide
-
-theorem freightBuggy_violation :
-    (⟨freightBuggy, .unique⟩ : Decision FreightCond FreightAsrt).eval
-      (shipment 1000 50000 "APAC" true) .surcharge = .violation := by
-  decide
-
-theorem freight_weight_iff (w : Value) :
-    passes (.range 0 1000 true true) w ∧ passes (.range 1000 5000 true true) w ↔
-      w = .int 1000 := by
-  cases w with
-  | int m =>
-    simp only [passes, Value.int.injEq]
-    omega
-  | str _ => simp [passes]
-  | bool _ => simp [passes]
-
-theorem freight_value_iff (w : Value) :
-    passes (.range 50000 200000 true true) w ∧ passes (.lt 50001) w ↔ w = .int 50000 := by
-  cases w with
-  | int m =>
-    simp only [passes, Value.int.injEq]
-    omega
-  | str _ => simp [passes]
-  | bool _ => simp [passes]
-
-theorem freight_region_iff (w : Value) :
-    passes mainRegions w ∧ passes (.eq (.str "APAC")) w ↔ w = .str "APAC" := by
-  constructor
-  · intro h
-    exact h.2
-  · intro h
-    subst h
-    exact ⟨by decide, rfl⟩
-
-theorem freight_hazmat_iff (w : Value) :
-    passes .any w ∧ passes (.eq (.bool true)) w ↔ w = .bool true :=
-  ⟨fun h => h.2, fun h => ⟨trivial, h⟩⟩
-
--- the two rules match the same input at exactly one point
-theorem freight_overlap_exactly (i : Is dmn FreightCond) :
-    lightHighValue.Invoked i ∧ apacHazmatBuggy.Invoked i ↔
-      i .weight = .int 1000 ∧ i .declaredValue = .int 50000 ∧
-        i .region = .str "APAC" ∧ i .hazmat = .bool true := by
-  constructor
-  · intro ⟨h₁, h₂⟩
-    exact ⟨(freight_weight_iff _).mp ⟨h₁ .weight, h₂ .weight⟩,
-      (freight_value_iff _).mp ⟨h₁ .declaredValue, h₂ .declaredValue⟩,
-      (freight_region_iff _).mp ⟨h₁ .region, h₂ .region⟩,
-      (freight_hazmat_iff _).mp ⟨h₁ .hazmat, h₂ .hazmat⟩⟩
-  · intro ⟨hw, hv, hr, hh⟩
-    have hw' := (freight_weight_iff _).mpr hw
-    have hv' := (freight_value_iff _).mpr hv
-    have hr' := (freight_region_iff _).mpr hr
-    have hh' := (freight_hazmat_iff _).mpr hh
-    constructor
-    · intro c
-      cases c
-      · exact hw'.1
-      · exact hv'.1
-      · exact hr'.1
-      · exact hh'.1
-    · intro c
-      cases c
-      · exact hw'.2
-      · exact hv'.2
-      · exact hr'.2
-      · exact hh'.2
-
--- the search finds the two rules (surcharges 50 and 120) and that exact input
-theorem freightBuggy_conflict :
-    (findUniqueConflict freightBuggy).map
-      (fun r => (r.1.asserts .surcharge, r.2.1.asserts .surcharge,
-        r.2.2 .weight, r.2.2 .declaredValue, r.2.2 .region, r.2.2 .hazmat)) =
-    some (some (.int 50), some (.int 120),
-      .int 1000, .int 50000, .str "APAC", .bool true) := by
-  decide
-
--- after the fix the search finds nothing, so no shipment ever causes a violation
-theorem freightFixed_conflict : (findUniqueConflict freightFixed).isNone := by
-  decide
-
-theorem freightFixed_unique : Unique freightFixed := by
-  decide
-
-theorem freightFixed_never_violates (i : Is dmn FreightCond) (a : FreightAsrt) :
-    (⟨freightFixed, .unique⟩ : Decision FreightCond FreightAsrt).eval i a ≠ .violation :=
-  eval_unique_ne_violation rfl freightFixed_unique i a
 
 end Maize.DMN

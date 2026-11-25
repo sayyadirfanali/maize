@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 236" width="760" height="236">
+  <style>
+    .bg { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    .hdr-bg { fill: #f6f8fa; }
+    .in-hdr { fill: #eef2ff; }
+    .out-hdr { fill: #f0f9ff; }
+    .err-row { fill: #fff1f2; }
+    .ok-cell { fill: #ecfdf5; }
+    .grid { stroke: #cbd5e1; stroke-width: 1; fill: none; }
+    .dbl { stroke: #64748b; stroke-width: 1.2; }
+    .title { font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0f172a; }
+    .th { font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #334155; }
+    .policy { font: 700 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0f172a; }
+    .num { font: 500 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #64748b; }
+    .cell { font: 500 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f172a; }
+    .err-txt { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #be123c; }
+    .ok-txt { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #047857; }
+    .note-err { font: 600 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #9f1239; }
+    .note-err-sub { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #be123c; }
+    .note-ok { font: 600 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #065f46; }
+    .note-ok-sub { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #047857; }
+  </style>
+
+  
+  <rect class="bg" x="0.5" y="0.5" width="759" height="235" rx="8" />
+
+  
+  <g transform="translate(24, 20)">
+    <rect class="hdr-bg" x="0" y="0" width="332" height="30" rx="4" />
+    <text class="title" x="12" y="20">Ticket Price — Buggy (Overlap at 12)</text>
+
+    
+    <rect class="hdr-bg" x="0" y="30" width="36" height="34" />
+    <rect class="in-hdr" x="36" y="30" width="150" height="34" />
+    <rect class="out-hdr" x="186" y="30" width="146" height="34" />
+
+    
+    <rect class="err-row" x="0" y="64" width="332" height="68" />
+
+    
+    <rect class="grid" x="0" y="0" width="332" height="132" rx="4" />
+    <line class="grid" x1="0" y1="30" x2="332" y2="30" />
+    <line class="dbl" x1="0" y1="62.5" x2="332" y2="62.5" />
+    <line class="dbl" x1="0" y1="65.5" x2="332" y2="65.5" />
+    <line class="grid" x1="0" y1="98" x2="332" y2="98" />
+    <line class="grid" x1="36" y1="30" x2="36" y2="132" />
+    <line class="dbl" x1="184.5" y1="30" x2="184.5" y2="132" />
+    <line class="dbl" x1="187.5" y1="30" x2="187.5" y2="132" />
+
+    
+    <text class="policy" x="18" y="52" text-anchor="middle">U</text>
+    <text class="th" x="111" y="51" text-anchor="middle">Input: Age</text>
+    <text class="th" x="259" y="51" text-anchor="middle">Output: Price</text>
+
+    <text class="num" x="18" y="86" text-anchor="middle">1</text>
+    <text class="err-txt" x="111" y="86" text-anchor="middle">&lt;= 12</text>
+    <text class="cell" x="259" y="86" text-anchor="middle">5</text>
+
+    <text class="num" x="18" y="120" text-anchor="middle">2</text>
+    <text class="err-txt" x="111" y="120" text-anchor="middle">&gt;= 12</text>
+    <text class="cell" x="259" y="120" text-anchor="middle">10</text>
+
+    
+    <rect x="0" y="146" width="332" height="48" rx="6" fill="#fef2f2" stroke="#fca5a5" />
+    <text class="note-err" x="14" y="166">findUniqueConflict  →  Age = 12</text>
+    <text class="note-err-sub" x="14" y="183">Both rules match → Unique violation (5 vs 10)</text>
+  </g>
+
+  
+  <g transform="translate(367, 86)">
+    <line x1="0" y1="0" x2="22" y2="0" stroke="#64748b" stroke-width="2" />
+    <polygon points="20,-5 28,0 20,5" fill="#64748b" />
+  </g>
+
+  
+  <g transform="translate(404, 20)">
+    <rect class="hdr-bg" x="0" y="0" width="332" height="30" rx="4" />
+    <text class="title" x="12" y="20">Ticket Price — Fixed (Disjoint)</text>
+
+    
+    <rect class="hdr-bg" x="0" y="30" width="36" height="34" />
+    <rect class="in-hdr" x="36" y="30" width="150" height="34" />
+    <rect class="out-hdr" x="186" y="30" width="146" height="34" />
+
+    
+    <rect class="ok-cell" x="36" y="64" width="150" height="34" />
+
+    
+    <rect class="grid" x="0" y="0" width="332" height="132" rx="4" />
+    <line class="grid" x1="0" y1="30" x2="332" y2="30" />
+    <line class="dbl" x1="0" y1="62.5" x2="332" y2="62.5" />
+    <line class="dbl" x1="0" y1="65.5" x2="332" y2="65.5" />
+    <line class="grid" x1="0" y1="98" x2="332" y2="98" />
+    <line class="grid" x1="36" y1="30" x2="36" y2="132" />
+    <line class="dbl" x1="184.5" y1="30" x2="184.5" y2="132" />
+    <line class="dbl" x1="187.5" y1="30" x2="187.5" y2="132" />
+
+    
+    <text class="policy" x="18" y="52" text-anchor="middle">U</text>
+    <text class="th" x="111" y="51" text-anchor="middle">Input: Age</text>
+    <text class="th" x="259" y="51" text-anchor="middle">Output: Price</text>
+
+    <text class="num" x="18" y="86" text-anchor="middle">1</text>
+    <text class="ok-txt" x="111" y="86" text-anchor="middle">&lt; 12</text>
+    <text class="cell" x="259" y="86" text-anchor="middle">5</text>
+
+    <text class="num" x="18" y="120" text-anchor="middle">2</text>
+    <text class="cell" x="111" y="120" text-anchor="middle">&gt;= 12</text>
+    <text class="cell" x="259" y="120" text-anchor="middle">10</text>
+
+    
+    <rect x="0" y="146" width="332" height="48" rx="6" fill="#f0fdf4" stroke="#86efac" />
+    <text class="note-ok" x="14" y="166">findUniqueConflict  →  none</text>
+    <text class="note-ok-sub" x="14" y="183">Proved: no input can ever violate Unique</text>
+  </g>
+</svg>

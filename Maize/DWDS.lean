@@ -4,20 +4,33 @@ import Maize.Core
 
 namespace Maize.DWDS
 
-/-! ## States, modes, hit -/
+/-! ## Logic -/
 
-inductive State where
+-- what a cell of a scenario expects of an input condition
+inductive Cell where
   | no        -- 00
   | yes       -- 01
   | yesAndNo  -- 10
   | yesOrNo   -- 11
   deriving DecidableEq, Repr
 
-instance : Fintype State where
-  elems := {State.no, State.yes, State.yesAndNo, State.yesOrNo}
+instance : Fintype Cell where
+  elems := {Cell.no, Cell.yes, Cell.yesAndNo, Cell.yesOrNo}
   complete := by
     intro s
     cases s <;> simp
+
+-- what a fact says
+inductive Fact where
+  | no
+  | yes
+  deriving DecidableEq, Repr
+
+instance : Fintype Fact where
+  elems := {Fact.no, Fact.yes}
+  complete := by
+    intro f
+    cases f <;> simp
 
 inductive Mode where
   | not     -- 00, no assertion
@@ -26,17 +39,19 @@ inductive Mode where
   | should  -- 11
   deriving DecidableEq, Repr
 
--- everything hits except `yes` against `no` (§5.5.3)
--- PROVISIONAL: `yesAndNo` against `yesOrNo` is unstated in the thesis; here a hit
-def hit : State → State → Prop
-  | .yes, .no => False
-  | .no, .yes => False
-  | _, _ => True
+-- a cell against a fact, as in §5.5.3:
+-- YES and NO need the same fact, YES-AND-NO and YES-OR-NO accept either
+def hit : Cell → Fact → Prop
+  | .yes, .yes => True
+  | .no, .no => True
+  | .yesAndNo, _ => True
+  | .yesOrNo, _ => True
+  | _, _ => False
 
 instance : DecidableRel hit := fun e o => by
   cases e <;> cases o <;> simp only [hit] <;> infer_instance
 
-abbrev dwds : Logic := ⟨State, State, Mode, hit, .not⟩
+abbrev dwds : Logic := ⟨Cell, Fact, Mode, hit, .not⟩
 
 instance {C A : Type} [Fintype C] (k : Clause dwds C A) (i : Is dwds C) :
     Decidable (k.Invoked i) :=
@@ -45,93 +60,86 @@ instance {C A : Type} [Fintype C] (k : Clause dwds C A) (i : Is dwds C) :
 instance {C A : Type} (a : A) (k k' : Clause dwds C A) : Decidable (k.Disagree a k') :=
   inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
-/-! ## The hit relation -/
+/-! ## Compatible Cells -/
 
-theorem hit_refl (s : State) : hit s s := by
-  cases s <;> trivial
+-- two cells some fact satisfies: all but YES against NO
+def Compatible : Cell → Cell → Prop
+  | .yes, .no => False
+  | .no, .yes => False
+  | _, _ => True
 
-theorem hit_symm {e o : State} : hit e o → hit o e := by
-  cases e <;> cases o <;> simp [hit]
+instance : DecidableRel Compatible := fun e e' => by
+  cases e <;> cases e' <;> simp only [Compatible] <;> infer_instance
 
--- `yes` hits `yesOrNo`, `yesOrNo` hits `no`, but `yes` misses `no`
-theorem hit_not_trans : ¬ ∀ x y z : State, hit x y → hit y z → hit x z :=
+theorem compatible_iff (e e' : Cell) :
+    (∃ b, True ∧ hit e b ∧ hit e' b) ↔ Compatible e e' := by
+  cases e <;> cases e' <;> decide
+
+theorem compatible_symm {e e' : Cell} : Compatible e e' → Compatible e' e := by
+  cases e <;> cases e' <;> simp [Compatible]
+
+-- `yes` with `yesOrNo`, `yesOrNo` with `no`, but not `yes` with `no`
+theorem compatible_not_trans :
+    ¬ ∀ x y z : Cell, Compatible x y → Compatible y z → Compatible x z :=
   fun h => h .yes .yesOrNo .no trivial trivial
 
-theorem hit_yesOrNo (e : State) : hit e .yesOrNo := by
-  cases e <;> trivial
+/-! ## Conservative Extension -/
 
-/-! ## Precision -/
-
-theorem refines_yesOrNo (o : State) : dwds.Refines o .yesOrNo := by
-  intro e _
-  exact hit_yesOrNo e
-
-theorem refines_yesAndNo (o : State) : dwds.Refines o .yesAndNo := by
-  intro e _
-  cases e <;> trivial
-
-theorem yes_not_refines_no : ¬ dwds.Refines .yes .no :=
-  fun h => h .yes trivial
-
-/-! ## Conservative extension over ordinary decision tables -/
-
--- ordinary decision tables: Boolean states, hit is equality
+-- ordinary decision tables: Boolean cells, hit is equality
 abbrev ordinary : Logic := ⟨Bool, Bool, Mode, (· = ·), .not⟩
 
-def ofBool : Bool → State
+-- `true` is YES, `false` is NO
+def ofBool : Bool → Cell
   | true => .yes
   | false => .no
 
--- `t` read as a DWDS table: `true` becomes `yes`, `false` becomes `no`
+def factOfBool : Bool → Fact
+  | true => .yes
+  | false => .no
+
+-- `t` read as a DWDS table
 def _root_.Maize.Table.toDWDS {C A : Type} (t : Table ordinary C A) : Table dwds C A :=
   Table.map (L := ordinary) (L' := dwds) ofBool id t
 
-theorem hit_ofBool (x y : Bool) : hit (ofBool x) (ofBool y) ↔ x = y := by
+theorem hit_ofBool (x y : Bool) : hit (ofBool x) (factOfBool y) ↔ x = y := by
   cases x <;> cases y <;> decide
 
--- on Boolean facts, the DWDS reading gives the same results as the ordinary one
+-- the DWDS reading gives the same results as the ordinary one
 theorem ought_toDWDS {C A : Type} (t : Table ordinary C A) (b : Is ordinary C)
     (a : A) (m : Mode) :
-    t.toDWDS.Ought (ofBool ∘ b) a m ↔ t.Ought b a m :=
-  Table.ought_map (L := ordinary) (L' := dwds) (fE := ofBool) (fO := ofBool) (g := id)
+    t.toDWDS.Ought (factOfBool ∘ b) a m ↔ t.Ought b a m :=
+  Table.ought_map (L := ordinary) (L' := dwds) (fE := ofBool) (fO := factOfBool) (g := id)
     hit_ofBool Function.injective_id (fun _ => Iff.rfl) t b a m
 
-/-! ## Choice points with definite facts -/
+/-! ## Choice Points -/
 
--- `o` is YES or NO
-def Definite : State → Prop
-  | .yes => True
-  | .no => True
-  | _ => False
-
-instance : DecidablePred Definite := fun o => by
-  cases o <;> simp only [Definite] <;> infer_instance
-
--- some definite `o` is hit by both `e` and `e'` iff `e` hits `e'`
-theorem hit_definite_iff (e e' : State) :
-    (∃ o, Definite o ∧ hit e o ∧ hit e' o) ↔ hit e e' := by
-  cases e <;> cases e' <;> decide
-
--- with definite facts, `k` and `k'` fire together iff no row has `yes` against `no`
-theorem coInvocable_definite_iff {C A : Type} (k k' : Clause dwds C A) :
-    k.CoInvocable Definite k' ↔ ∀ c, hit (k.expects c) (k'.expects c) := by
-  rw [Clause.coInvocable_iff]
-  exact forall_congr' fun c => hit_definite_iff (k.expects c) (k'.expects c)
-
--- `a` is decisive iff every disagreeing pair has a `yes` against `no` in some row
+-- `a` is decisive iff every disagreeing pair has a YES against NO in some row
 theorem decisive_iff {C A : Type} (t : Table dwds C A) (a : A) :
-    t.Decisive Definite a ↔
+    t.Decisive (fun _ => True) a ↔
       ∀ k ∈ t.clauses, ∀ k' ∈ t.clauses,
-        k.Disagree a k' → ∃ c, ¬ hit (k.expects c) (k'.expects c) :=
-  Table.decisive_iff_rows hit_definite_iff t a
+        k.Disagree a k' → ∃ c, ¬ Compatible (k.expects c) (k'.expects c) :=
+  Table.decisive_iff_rows (P := fun _ => True) compatible_iff t a
 
--- with unrestricted facts, any two clauses fire together: all `yesOrNo`
-theorem coInvocable_any {C A : Type} (k k' : Clause dwds C A) :
-    k.CoInvocable (fun _ => True) k' :=
-  ⟨fun _ => .yesOrNo, fun _ => trivial,
-    fun c => hit_yesOrNo (k.expects c), fun c => hit_yesOrNo (k'.expects c)⟩
+-- a fact both cells accept, YES if possible, otherwise NO (like DMN's `Shape.sample`)
+def sample (e e' : Cell) : Option Fact :=
+  if hit e .yes ∧ hit e' .yes then some .yes
+  else if hit e .no ∧ hit e' .no then some .no
+  else none
 
-/-! ## Catch-all states -/
+theorem sample_sound :
+    ∀ e e' b, sample e e' = some b → True ∧ hit e b ∧ hit e' b := by
+  decide
+
+theorem sample_complete :
+    ∀ e e', (∃ b, True ∧ hit e b ∧ hit e' b) → (sample e e').isSome := by
+  decide
+
+def sampler : dwds.Sampler (fun _ => True) where
+  sample := DWDS.sample
+  sound h := sample_sound _ _ _ h
+  complete h := sample_complete _ _ h
+
+/-! ## Catch-All Cells -/
 
 theorem universal_yesOrNo : dwds.Universal .yesOrNo := by
   intro o
@@ -141,62 +149,12 @@ theorem universal_yesAndNo : dwds.Universal .yesAndNo := by
   intro o
   cases o <;> trivial
 
-/-! ## A minimal example -/
-
-inductive MiniCond where
-  | loaded | locked
-  deriving DecidableEq
-
-instance : Fintype MiniCond where
-  elems := {MiniCond.loaded, MiniCond.locked}
-  complete := by
-    intro c
-    cases c <;> simp
-
-inductive MiniAsrt where
-  | stevedore
-  deriving DecidableEq
-
--- a scenario: expected loaded, expected locked, mode for notifying the stevedore
-def miniScenario (eLoaded eLocked : State) (mStevedore : Mode) :
-    Clause dwds MiniCond MiniAsrt where
-  expects
-    | .loaded => eLoaded
-    | .locked => eLocked
-  asserts
-    | .stevedore => mStevedore
-
--- 1: loaded, locked either way → MUST notify; 2: loaded either way, locked → MAY notify
-def mini : Table dwds MiniCond MiniAsrt := ⟨[
-  miniScenario .yes .yesOrNo .must,
-  miniScenario .yesOrNo .yes .may
-]⟩
-
--- observed loaded and locked
-def miniObserve (oLoaded oLocked : State) : Is dwds MiniCond
-  | .loaded => oLoaded
-  | .locked => oLocked
-
--- loaded and not locked: only scenario 1 applies
-theorem mini_one :
-    mini.execute (miniObserve .yes .no) .stevedore = [.must] := by
-  decide
-
--- loaded and locked: both apply, so the notification is left to a human
-theorem mini_both :
-    mini.execute (miniObserve .yes .yes) .stevedore = [.must, .may] := by
-  decide
-
-theorem mini_deferred : mini.Deferred (miniObserve .yes .yes) .stevedore :=
-  ⟨.must, .may,
-    (mini.mem_execute _ .stevedore .must).mp (by decide),
-    (mini.mem_execute _ .stevedore .may).mp (by decide),
-    by decide⟩
-
-/-! ## Container example (Figure 28, Figures 30–31) -/
+/-! ## Example: Container (from Potvin 2023) -/
 
 inductive Cond where
-  | loaded | inspected | locked
+  | loaded
+  | inspected
+  | locked
   deriving DecidableEq
 
 instance : Fintype Cond where
@@ -206,11 +164,24 @@ instance : Fintype Cond where
     cases c <;> simp
 
 inductive Asrt where
-  | green | yellow | red | stevedore | insurance
-  deriving DecidableEq
+  | green
+  | yellow
+  | red
+  | stevedore
+  | insurance
+  deriving DecidableEq, Repr
 
--- a column, written in Figure 28's row order: expected states, then modes
-def scenario (eLoaded eInspected eLocked : State)
+instance : Fintype Asrt where
+  elems := {Asrt.green, Asrt.yellow, Asrt.red, Asrt.stevedore, Asrt.insurance}
+  complete := by
+    intro a
+    cases a <;> simp
+
+-- all assertions, in Figure 28's row order
+def allAsrt : List Asrt := [.green, .yellow, .red, .stevedore, .insurance]
+
+-- a column, written in Figure 28's row order: cells, then modes
+def scenario (eLoaded eInspected eLocked : Cell)
     (mGreen mYellow mRed mStevedore mInsurance : Mode) : Clause dwds Cond Asrt where
   expects
     | .loaded => eLoaded
@@ -235,8 +206,8 @@ def container : Table dwds Cond Asrt := ⟨[
   scenario .yesAndNo .yes       .yes        .must  .not    .not   .may      .must     -- H
 ]⟩
 
--- observed states of the three conditions
-def observe (oLoaded oInspected oLocked : State) : Is dwds Cond
+-- facts for the three conditions
+def observe (oLoaded oInspected oLocked : Fact) : Is dwds Cond
   | .loaded => oLoaded
   | .inspected => oInspected
   | .locked => oLocked
@@ -245,124 +216,85 @@ def observe (oLoaded oInspected oLocked : State) : Is dwds Cond
 def isA : Is dwds Cond := observe .no .yes .no
 
 theorem exampleA :
-    container.execute isA .green = [] ∧
-    container.execute isA .yellow = [.must] ∧
-    container.execute isA .red = [] ∧
-    container.execute isA .stevedore = [.should] ∧
-    container.execute isA .insurance = [.must] := by
+    container.activeOutcomes isA allAsrt =
+      [[(.yellow, .must), (.stevedore, .should), (.insurance, .must)]] := by
   decide
 
--- Figure 31: loaded, not inspected, locked → scenarios B and D
+theorem exampleA_no_choice : ¬ container.Choice isA := by
+  rw [Table.choice_iff]
+  decide
+
+-- Figure 31: loaded, not inspected, locked → scenarios B and D, kept apart
 def isB : Is dwds Cond := observe .yes .no .yes
 
 theorem exampleB :
-    container.execute isB .green = [.must] ∧
-    container.execute isB .yellow = [] ∧
-    container.execute isB .red = [.must] ∧
-    container.execute isB .stevedore = [.may, .must] ∧
-    container.execute isB .insurance = [.must, .may] := by
+    container.activeOutcomes isB allAsrt =
+      [[(.green, .must), (.stevedore, .may), (.insurance, .must)],    -- B
+       [(.red, .must), (.stevedore, .must), (.insurance, .may)]] := by  -- D
   decide
 
--- in example B the stevedore notification is left to a human
+theorem exampleB_choice : container.Choice isB := by
+  rw [Table.choice_iff]
+  decide
+
+-- in example B the stevedore notification gets two modes
 theorem exampleB_stevedore_deferred : container.Deferred isB .stevedore :=
   ⟨.may, .must,
-    (container.mem_execute isB .stevedore .may).mp (by decide),
-    (container.mem_execute isB .stevedore .must).mp (by decide),
+    (container.ought_iff_outcomes isB .stevedore .may).mpr (by decide),
+    (container.ought_iff_outcomes isB .stevedore .must).mpr (by decide),
     by decide⟩
 
-/-! ## Choice points of the container table -/
+-- not loaded, not inspected, locked → scenarios A and B
+def isAB : Is dwds Cond := observe .no .no .yes
 
--- with definite facts, the three lights never need a human decision
-theorem container_decisive_green : container.Decisive Definite .green := by
-  rw [decisive_iff]
+theorem exampleAB :
+    container.activeOutcomes isAB allAsrt =
+      [[(.green, .must), (.stevedore, .should)],                       -- A
+       [(.green, .must), (.stevedore, .may), (.insurance, .must)]] := by  -- B
   decide
 
-theorem container_decisive_yellow : container.Decisive Definite .yellow := by
-  rw [decisive_iff]
+theorem exampleAB_choice : container.Choice isAB := by
+  rw [Table.choice_iff]
   decide
 
-theorem container_decisive_red : container.Decisive Definite .red := by
-  rw [decisive_iff]
+/-! ## Finding Choice Points -/
+
+-- the first choice: A against B, with insurance only in B, at the facts of `isAB`
+theorem container_choice :
+    (container.findChoice sampler).map
+      (fun r => (r.1.asserts .insurance, r.2.1.asserts .insurance,
+        r.2.2 .loaded, r.2.2 .inspected, r.2.2 .locked)) =
+    some (.not, .must, .no, .no, .yes) := by
   decide
 
--- the stevedore (A with B, B with D) and insurance (B with D) notifications
--- can need a human decision
-theorem container_not_decisive_stevedore : ¬ container.Decisive Definite .stevedore := by
-  rw [decisive_iff]
-  decide
-
-theorem container_not_decisive_insurance : ¬ container.Decisive Definite .insurance := by
-  rw [decisive_iff]
-  decide
-
-/-! ## Finding choice points -/
-
--- a definite state that both `e` and `e'` hit: YES if possible, otherwise NO
-def pickDefinite (e e' : State) : Option State :=
-  if hit e .yes ∧ hit e' .yes then some .yes
-  else if hit e .no ∧ hit e' .no then some .no
-  else none
-
-theorem pickDefinite_sound :
-    ∀ e e' o, pickDefinite e e' = some o → Definite o ∧ hit e o ∧ hit e' o := by
-  decide
-
-theorem pickDefinite_complete :
-    ∀ e e', (∃ o, Definite o ∧ hit e o ∧ hit e' o) → (pickDefinite e e').isSome := by
-  decide
-
--- with definite facts, DWDS picks YES or NO condition by condition
-def definiteSampler : dwds.Sampler Definite where
-  sample := pickDefinite
-  sound h := pickDefinite_sound _ _ _ h
-  complete h := pickDefinite_complete _ _ h
-
--- in the minimal example, loaded and locked is where the stevedore is left to a human
-theorem mini_choice :
-    (mini.findConflict definiteSampler .stevedore).map
-      (fun r => (r.1.asserts .stevedore, r.2.1.asserts .stevedore,
-        r.2.2 .loaded, r.2.2 .locked)) =
-    some (.must, .may, .yes, .yes) := by
-  decide
-
--- stevedore: scenarios A (SHOULD) and B (MAY), when not loaded, not inspected and locked
-theorem container_stevedore_choice :
-    (container.findConflict definiteSampler .stevedore).map
+-- stevedore: scenarios A (SHOULD) and B (MAY), at the facts of `isAB`
+theorem container_stevedore_conflict :
+    (container.findConflict sampler .stevedore).map
       (fun r => (r.1.asserts .stevedore, r.2.1.asserts .stevedore,
         r.2.2 .loaded, r.2.2 .inspected, r.2.2 .locked)) =
     some (.should, .may, .no, .no, .yes) := by
   decide
 
--- insurance: scenarios B (MUST) and D (MAY), in the situation of Figure 31
-theorem container_insurance_choice :
-    (container.findConflict definiteSampler .insurance).map
+-- insurance: scenarios B (MUST) and D (MAY), at the facts of Figure 31
+theorem container_insurance_conflict :
+    (container.findConflict sampler .insurance).map
       (fun r => (r.1.asserts .insurance, r.2.1.asserts .insurance,
         r.2.2 .loaded, r.2.2 .inspected, r.2.2 .locked)) =
     some (.must, .may, .yes, .no, .yes) := by
   decide
 
--- the lights: nothing is found, so they never need a human decision
-theorem container_green_no_choice :
-    (container.findConflict definiteSampler .green).isNone := by
-  decide
-
-/-! ## Findings -/
-
--- decisiveness is per assertion: in example B the green and red lights are both MUST
-theorem exampleB_green_and_red :
-    container.Determinate isB .green ∧ container.Determinate isB .red :=
-  ⟨container.determinate_of_execute (m := .must) (by decide),
-    container.determinate_of_execute (m := .must) (by decide)⟩
+/-! ## Catch-All Example -/
 
 -- a catch-all meant as "otherwise, yellow light"
 def withDefault : Table dwds Cond Asrt :=
   container.append ⟨[scenario .yesOrNo .yesOrNo .yesOrNo .not .must .not .not .not]⟩
 
--- it is not an else: in example B it fires next to B and D
+-- it is not an else: in example B it applies next to B and D
 theorem exampleB_withDefault :
-    withDefault.execute isB .green = [.must] ∧
-    withDefault.execute isB .yellow = [.must] ∧
-    withDefault.execute isB .red = [.must] := by
+    withDefault.activeOutcomes isB allAsrt =
+      [[(.green, .must), (.stevedore, .may), (.insurance, .must)],
+       [(.red, .must), (.stevedore, .must), (.insurance, .may)],
+       [(.yellow, .must)]] := by
   decide
 
 end Maize.DWDS

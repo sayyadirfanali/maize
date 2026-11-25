@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 492" width="760" height="492">
+  <defs>
+    <g id="b00">
+      <rect x="-17" y="-11" width="34" height="22" rx="4" fill="#dbdee6" />
+      <text x="0" y="4" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#1e293b">00</text>
+    </g>
+    <g id="b01">
+      <rect x="-17" y="-11" width="34" height="22" rx="4" fill="#081a59" />
+      <text x="0" y="4" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#ffffff">01</text>
+    </g>
+    <g id="b10">
+      <rect x="-17" y="-11" width="34" height="22" rx="4" fill="#a523f0" />
+      <text x="0" y="4" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#ffffff">10</text>
+    </g>
+    <g id="b11">
+      <rect x="-17" y="-11" width="34" height="22" rx="4" fill="#f06318" />
+      <text x="0" y="4" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#ffffff">11</text>
+    </g>
+  </defs>
+
+  <style>
+    .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    .title { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0f172a; }
+    .sub { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #475569; }
+    .sec { font: 700 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .lbl { font: 500 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1e293b; }
+    .col-hdr { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #334155; }
+    .col-hit { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #15803d; }
+    .legend { font: 500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #475569; }
+    .bundle-title { font: 700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0f172a; }
+    .bundle-body { font: 500 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #334155; }
+  </style>
+
+  
+  <rect class="card" x="0.5" y="0.5" width="759" height="491" rx="8" />
+
+  
+  <text class="title" x="24" y="30">DWDS Shipping Container Logic Gate (Potvin 2023, Figs. 28 &amp; 31)</text>
+  <text class="sub" x="24" y="49">Example B — Observed facts: Loaded = YES (01), Inspected = NO (00), Locked = YES (01)</text>
+
+  
+  <rect x="359" y="64" width="52" height="328" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2" />
+  <rect x="467" y="64" width="52" height="328" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2" />
+
+  
+  <rect x="234" y="64" width="52" height="140" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
+
+  
+  <text class="col-hdr" x="260" y="83" text-anchor="middle">Fact</text>
+  <text class="col-hdr" x="331" y="83" text-anchor="middle">A</text>
+  <text class="col-hit" x="385" y="83" text-anchor="middle">B ✓</text>
+  <text class="col-hdr" x="439" y="83" text-anchor="middle">C</text>
+  <text class="col-hit" x="493" y="83" text-anchor="middle">D ✓</text>
+  <text class="col-hdr" x="547" y="83" text-anchor="middle">E</text>
+  <text class="col-hdr" x="601" y="83" text-anchor="middle">F</text>
+  <text class="col-hdr" x="655" y="83" text-anchor="middle">G</text>
+  <text class="col-hdr" x="709" y="83" text-anchor="middle">H</text>
+
+  
+  <text class="sec" x="24" y="106">Input Conditions</text>
+
+  
+  <text class="lbl" x="24" y="132">1. Container status: loaded</text>
+  <use href="#b01" x="260" y="128" />
+  <use href="#b00" x="331" y="128" />
+  <use href="#b11" x="385" y="128" />
+  <use href="#b00" x="439" y="128" />
+  <use href="#b01" x="493" y="128" />
+  <use href="#b01" x="547" y="128" />
+  <use href="#b01" x="601" y="128" />
+  <use href="#b00" x="655" y="128" />
+  <use href="#b10" x="709" y="128" />
+
+  
+  <text class="lbl" x="24" y="162">2. Validation status: inspected</text>
+  <use href="#b00" x="260" y="158" />
+  <use href="#b00" x="331" y="158" />
+  <use href="#b11" x="385" y="158" />
+  <use href="#b11" x="439" y="158" />
+  <use href="#b00" x="493" y="158" />
+  <use href="#b01" x="547" y="158" />
+  <use href="#b00" x="601" y="158" />
+  <use href="#b01" x="655" y="158" />
+  <use href="#b01" x="709" y="158" />
+
+  
+  <text class="lbl" x="24" y="192">3. Door status: locked</text>
+  <use href="#b01" x="260" y="188" />
+  <use href="#b11" x="331" y="188" />
+  <use href="#b01" x="385" y="188" />
+  <use href="#b00" x="439" y="188" />
+  <use href="#b01" x="493" y="188" />
+  <use href="#b00" x="547" y="188" />
+  <use href="#b00" x="601" y="188" />
+  <use href="#b01" x="655" y="188" />
+  <use href="#b01" x="709" y="188" />
+
+  
+  <line x1="24" y1="212" x2="736" y2="212" stroke="#cbd5e1" stroke-width="1" />
+
+  
+  <text class="sec" x="24" y="232">Output Assertions</text>
+
+  
+  <text class="lbl" x="24" y="258">i. Risk code: green</text>
+  <use href="#b01" x="331" y="254" />
+  <use href="#b01" x="385" y="254" />
+  <use href="#b00" x="439" y="254" />
+  <use href="#b00" x="493" y="254" />
+  <use href="#b00" x="547" y="254" />
+  <use href="#b00" x="601" y="254" />
+  <use href="#b01" x="655" y="254" />
+  <use href="#b01" x="709" y="254" />
+
+  
+  <text class="lbl" x="24" y="288">ii. Risk code: yellow</text>
+  <use href="#b00" x="331" y="284" />
+  <use href="#b00" x="385" y="284" />
+  <use href="#b01" x="439" y="284" />
+  <use href="#b00" x="493" y="284" />
+  <use href="#b01" x="547" y="284" />
+  <use href="#b01" x="601" y="284" />
+  <use href="#b00" x="655" y="284" />
+  <use href="#b00" x="709" y="284" />
+
+  
+  <text class="lbl" x="24" y="318">iii. Risk code: red</text>
+  <use href="#b00" x="331" y="314" />
+  <use href="#b00" x="385" y="314" />
+  <use href="#b00" x="439" y="314" />
+  <use href="#b01" x="493" y="314" />
+  <use href="#b00" x="547" y="314" />
+  <use href="#b00" x="601" y="314" />
+  <use href="#b00" x="655" y="314" />
+  <use href="#b00" x="709" y="314" />
+
+  
+  <text class="lbl" x="24" y="348">iv. Stevedore: notified</text>
+  <use href="#b11" x="331" y="344" />
+  <use href="#b10" x="385" y="344" />
+  <use href="#b11" x="439" y="344" />
+  <use href="#b01" x="493" y="344" />
+  <use href="#b01" x="547" y="344" />
+  <use href="#b01" x="601" y="344" />
+  <use href="#b00" x="655" y="344" />
+  <use href="#b10" x="709" y="344" />
+
+  
+  <text class="lbl" x="24" y="378">v. Insurance: co-signed</text>
+  <use href="#b00" x="331" y="374" />
+  <use href="#b01" x="385" y="374" />
+  <use href="#b01" x="439" y="374" />
+  <use href="#b10" x="493" y="374" />
+  <use href="#b01" x="547" y="374" />
+  <use href="#b00" x="601" y="374" />
+  <use href="#b00" x="655" y="374" />
+  <use href="#b01" x="709" y="374" />
+
+  
+  <g transform="translate(24, 412)">
+    <use href="#b00" x="17" y="0" />
+    <text class="legend" x="40" y="4">NO / NOT</text>
+
+    <use href="#b01" x="140" y="0" />
+    <text class="legend" x="163" y="4">YES / MUST</text>
+
+    <use href="#b10" x="280" y="0" />
+    <text class="legend" x="303" y="4">YES-AND-NO / MAY</text>
+
+    <use href="#b11" x="468" y="0" />
+    <text class="legend" x="491" y="4">YES-OR-NO / SHOULD</text>
+  </g>
+
+  
+  <rect x="24" y="434" width="346" height="44" rx="6" fill="#f0fdf4" stroke="#86efac" />
+  <text class="bundle-title" x="36" y="452">Scenario B bundle (human choice 1)</text>
+  <text class="bundle-body" x="36" y="469">green: MUST · stevedore: MAY · insurance: MUST</text>
+
+  <rect x="390" y="434" width="346" height="44" rx="6" fill="#f0fdf4" stroke="#86efac" />
+  <text class="bundle-title" x="402" y="452">Scenario D bundle (human choice 2)</text>
+  <text class="bundle-body" x="402" y="469">red: MUST · stevedore: MUST · insurance: MAY</text>
+</svg>
